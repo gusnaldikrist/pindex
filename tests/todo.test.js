@@ -182,7 +182,7 @@ function createTestEnvironment(initialData = null) {
     return elements.get(id);
   }
 
-  const statusBar = getOrCreateElement('status-bar');
+  getOrCreateElement('status-bar');
   const panelIndeks = getOrCreateElement('panel-indeks', 'section');
   const panelTodo = getOrCreateElement('panel-todo', 'section');
   const panelLog = getOrCreateElement('panel-log', 'section');
@@ -194,8 +194,8 @@ function createTestEnvironment(initialData = null) {
   const tabLog = getOrCreateElement('tab-log', 'button');
   tabLog.setAttribute('data-tab', 'log');
 
-  const todoSearchInput = getOrCreateElement('todo-search-input', 'input');
-  const btnTambahTodo = getOrCreateElement('btn-tambah-todo', 'button');
+  getOrCreateElement('todo-search-input', 'input');
+  getOrCreateElement('btn-tambah-todo', 'button');
   const todoList = getOrCreateElement('todo-list');
 
   const filterSemua = createElementObj('filter-semua', 'button');
@@ -418,7 +418,7 @@ test('Tiket 07 - Centang todo: klik checkbox mengubah status selesai & tersimpan
   assert.match(todoList.innerHTML, /selesai/, 'Badge status harus berubah menjadi selesai');
 });
 
-test('Tiket 07 - Pengurutan: belum selesai di atas, urut updated_at menurun', async () => {
+test('Tiket 07 - Pengurutan: selesai di bawah, dan tanpa tenggat diurutkan waktu ubah', async () => {
   const env = createTestEnvironment();
   // detectStorageMode lalu loadData async sejak tiket 11
   await new Promise(resolve => setImmediate(resolve));
@@ -436,7 +436,8 @@ test('Tiket 07 - Pengurutan: belum selesai di atas, urut updated_at menurun', as
   assert.deepEqual(
     sorted.map(t => t.id),
     ['t-active-new', 't-active-old', 't-done-new', 't-done-old'],
-    'Belum selesai harus di atas, dan masing-masing diurutkan updated_at menurun'
+    'Selesai tetap di bawah, dan yang tidak punya tenggat diurutkan waktu ubah menurun. ' +
+    'Pengurutan memakai deadline ada di pengujian tiket 01.'
   );
 });
 
@@ -712,4 +713,84 @@ test('Tiket 07 - Verifikasi CSS: Tidak memakai token var(--surface) dan tidak me
   const isDoneBlockMatch = cssContent.match(/\.todo-text\.is-done\s*\{([^}]+)\}/);
   assert.ok(isDoneBlockMatch, 'Blok .todo-text.is-done harus ditemukan');
   assert.ok(!isDoneBlockMatch[1].includes('line-through'), 'Teks todo selesai tidak boleh dicoret garis (line-through)');
+});
+
+// Urutan memakai deadline. Fixture sengaja mencampur tugas bertenggat dan
+// tanpa tenggat: kalau semua punya tenggat berbeda, pengujian tetap lulus
+// walau deadline diabaikan sama sekali.
+test('Tiket 01 - Urutan memakai deadline, bukan kapan terakhir disentuh', async () => {
+  const env = createTestEnvironment();
+  await new Promise(resolve => setImmediate(resolve));
+  await new Promise(resolve => setImmediate(resolve));
+  const { filterTodos } = env.sandbox;
+
+  const testTodos = [
+    // Paling mendesak tapi paling lama tidak disentuh
+    { id: 'lewat', teks: 'Lewat', done: false, deadline: '2020-01-01', updated_at: '2020-01-01' },
+    // Tanpa tenggat, tapi baru disentuh
+    { id: 'tanpa', teks: 'Tanpa Tenggat', done: false, deadline: null, updated_at: '2026-10-01' },
+    // Jauh nanti dan baru disentuh
+    { id: 'nanti', teks: 'Nanti', done: false, deadline: '2099-01-01', updated_at: '2026-10-02' }
+  ];
+
+  const sorted = filterTodos(testTodos, [], '', 'semua');
+  assert.deepEqual(
+    sorted.map(t => t.id),
+    ['lewat', 'nanti', 'tanpa'],
+    'Deadline menaik dulu, tugas tanpa tenggat turun ke bawah semua yang bertenggat'
+  );
+});
+
+test('Tiket 01 - Deadline sama dipecah oleh kapan terakhir disentuh', async () => {
+  const env = createTestEnvironment();
+  await new Promise(resolve => setImmediate(resolve));
+  await new Promise(resolve => setImmediate(resolve));
+  const { filterTodos } = env.sandbox;
+
+  const testTodos = [
+    { id: 'lama', teks: 'Lama', done: false, deadline: '2099-05-05', updated_at: '2026-01-01' },
+    { id: 'baru', teks: 'Baru', done: false, deadline: '2099-05-05', updated_at: '2026-09-01' }
+  ];
+
+  const sorted = filterTodos(testTodos, [], '', 'semua');
+  assert.deepEqual(sorted.map(t => t.id), ['baru', 'lama'],
+    'Deadline sama harus punya urutan yang ditentukan, bukan acak');
+});
+
+test('Tiket 01 - Deadline rusak dianggap tidak punya deadline', async () => {
+  const env = createTestEnvironment();
+  await new Promise(resolve => setImmediate(resolve));
+  await new Promise(resolve => setImmediate(resolve));
+  const { filterTodos } = env.sandbox;
+
+  const testTodos = [
+    { id: 'rusak', teks: 'Rusak', done: false, deadline: 'bukan tanggal', updated_at: '2026-09-01' },
+    { id: 'sah', teks: 'Sah', done: false, deadline: '2099-01-01', updated_at: '2026-01-01' },
+    { id: 'kosong', teks: 'Kosong', done: false, deadline: '', updated_at: '2026-08-01' }
+  ];
+
+  const sorted = filterTodos(testTodos, [], '', 'semua');
+  assert.deepEqual(sorted.map(t => t.id), ['sah', 'rusak', 'kosong'],
+    'Deadline rusak tidak boleh membuat daftar gagal; diperlakukan sebagai tidak punya tenggat');
+});
+
+test('Tiket 01 - Urutan tetap benar saat disaring dan saat dicari', async () => {
+  const env = createTestEnvironment();
+  await new Promise(resolve => setImmediate(resolve));
+  await new Promise(resolve => setImmediate(resolve));
+  const { filterTodos } = env.sandbox;
+
+  const testTodos = [
+    { id: 'a-lewat', teks: 'Opsi lapar', done: false, deadline: '2020-01-01', updated_at: '2020-01-01' },
+    { id: 'a-nanti', teks: 'Opsi.amazonaws', done: false, deadline: '2099-01-01', updated_at: '2026-01-01' },
+    { id: 'selesai', teks: 'Opsi selesai', done: true, deadline: '2020-01-01', updated_at: '2026-01-01' }
+  ];
+
+  const belum = filterTodos(testTodos, [], '', 'belum');
+  assert.deepEqual(belum.map(t => t.id), ['a-lewat', 'a-nanti'],
+    'Saringan belum selesai tidak boleh mengubah urutan deadline');
+
+  const cari = filterTodos(testTodos, [], 'Opsi', 'semua');
+  assert.deepEqual(cari.map(t => t.id), ['a-lewat', 'a-nanti', 'selesai'],
+    'Pencarian tidak boleh mengacak urutan');
 });

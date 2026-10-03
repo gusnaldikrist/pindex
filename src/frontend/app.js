@@ -1418,22 +1418,35 @@ const ubahBtn = e.target.closest('.panel-ubah');
     return `t${counter}`;
   }
 
+  // Selisih hari kalender antara deadline dan hari ini. Mengembalikan null bila
+// deadline tidak ada, bukan tanggal, atau tidak berbentuk YYYY-MM-DD.
+//
+// Satu definisi ini dipakai penghitungan label dan pengurutan, supaya keduanya
+// tidak bisa berbeda pendapat tentang satu baris. Memakai Date.UTC, bukan
+//构造 objek tanggal lokal, supaya selisihnya tidak ikut berubah saat zona waktu
+// atau daylight saving bergerak.
+function deadlineHariKe(deadline, todayString) {
+    const mentah = deadline ? String(deadline) : '';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(mentah)) return null;
+    const bagianDeadline = mentah.split('-').map(Number);
+    const bagianHariIni = String(todayString).split('-').map(Number);
+    if (bagianDeadline.length !== 3 || bagianHariIni.length !== 3 || bagianDeadline.some(isNaN) || bagianHariIni.some(isNaN)) {
+      return null;
+    }
+    const deadlineUtc = Date.UTC(bagianDeadline[0], bagianDeadline[1] - 1, bagianDeadline[2]);
+    const todayUtc = Date.UTC(bagianHariIni[0], bagianHariIni[1] - 1, bagianHariIni[2]);
+    return Math.round((deadlineUtc - todayUtc) / (1000 * 60 * 60 * 24));
+  }
+
   function getTodoStatus(todo, todayString = getTodayDateString()) {
     if (!todo) return { type: 'none', label: '' };
     if (todo.done) {
       return { type: 'selesai', label: 'selesai' };
     }
-    if (!todo.deadline || !/^\d{4}-\d{2}-\d{2}$/.test(String(todo.deadline))) {
+    const diffDays = deadlineHariKe(todo.deadline, todayString);
+    if (diffDays === null) {
       return { type: 'none', label: '' };
     }
-    const deadlineParts = String(todo.deadline).split('-').map(Number);
-    const todayParts = String(todayString).split('-').map(Number);
-    if (deadlineParts.length !== 3 || todayParts.length !== 3 || deadlineParts.some(isNaN) || todayParts.some(isNaN)) {
-      return { type: 'none', label: '' };
-    }
-    const deadlineUtc = Date.UTC(deadlineParts[0], deadlineParts[1] - 1, deadlineParts[2]);
-    const todayUtc = Date.UTC(todayParts[0], todayParts[1] - 1, todayParts[2]);
-    const diffDays = Math.round((deadlineUtc - todayUtc) / (1000 * 60 * 60 * 24));
 
     if (diffDays < 0) {
       return { type: 'lewat', label: 'lewat' };
@@ -1499,19 +1512,32 @@ function filterLinkedRows(rows, items, query, spec) {
   }
 
   function filterTodos(todos, items, query, filterStatus) {
+    const hariIni = getTodayDateString();
+    const berubahTerakhir = (a, b) => (b.updated_at || '').localeCompare(a.updated_at || '');
+
     return filterLinkedRows(todos, items, query, {
       keep(todo) {
         if (filterStatus === 'belum' && todo.done) return false;
         if (filterStatus === 'selesai' && !todo.done) return false;
         return true;
       },
+      // Urutan pakai deadline, bukan kapan terakhir disentuh. Tugas yang sudah
+      // lewat tidak butuh aturan sendiri: tanggalnya adalah tanggal paling
+      // awal, jadi sudah otomatis berada di paling atas.
       compare(todoA, todoB) {
         if (todoA.done !== todoB.done) {
           return todoA.done ? 1 : -1;
         }
-        const dateA = todoA.updated_at || '';
-        const dateB = todoB.updated_at || '';
-        return dateB.localeCompare(dateA);
+        if (todoA.done) {
+          return berubahTerakhir(todoA, todoB);
+        }
+        const a = deadlineHariKe(todoA.deadline, hariIni);
+        const b = deadlineHariKe(todoB.deadline, hariIni);
+        if (a === null && b === null) return berubahTerakhir(todoA, todoB);
+        if (a === null) return 1;
+        if (b === null) return -1;
+        if (a !== b) return a - b;
+        return berubahTerakhir(todoA, todoB);
       }
     });
   }
@@ -1616,7 +1642,9 @@ function filterLinkedRows(rows, items, query, spec) {
         btn.addEventListener('click', () => {
           const filter = btn.getAttribute('data-filter') || 'semua';
           state.todoFilterStatus = filter;
-          filterBtns.forEach(otherBtn => otherBtn.classList.toggle('active', otherBtn === btn));
+          // Block body, bukan concise: toggle mengembalikan boolean, dan callback
+          // forEach tidak boleh mengembalikan apa pun.
+          filterBtns.forEach((otherBtn) => { otherBtn.classList.toggle('active', otherBtn === btn); });
           renderTodoView();
         });
       }
