@@ -153,12 +153,14 @@ function createTestEnvironment(initialData = null) {
       },
       trigger: (evt, evtData = {}) => {
         if (listeners[evt]) {
-          listeners[evt].forEach(h => h({
-            target: el,
-            preventDefault: () => {},
-            stopPropagation: () => {},
-            ...evtData
-          }));
+          listeners[evt].forEach((h) => {
+            h({
+              target: el,
+              preventDefault: () => {},
+              stopPropagation: () => {},
+              ...evtData
+            });
+          });
         }
       },
       focus: () => {},
@@ -175,7 +177,9 @@ function createTestEnvironment(initialData = null) {
     return elements.get(id);
   }
 
-  const statusBar = getOrCreateElement('status-bar');
+  // Panggilannya tetap perlu walau hasilnya tidak dipakai: di DOM palsu,
+  // satu-satunya cara membuat elemen adalah memintanya.
+  getOrCreateElement('status-bar');
   const panelIndeks = getOrCreateElement('panel-indeks', 'section');
   const panelTodo = getOrCreateElement('panel-todo', 'section');
   const panelLog = getOrCreateElement('panel-log', 'section');
@@ -241,7 +245,7 @@ function createTestEnvironment(initialData = null) {
     },
     trigger: (evt, data) => {
       if (docListeners[evt]) {
-        docListeners[evt].forEach(h => h(data));
+        docListeners[evt].forEach((h) => { h(data); });
       }
     }
   };
@@ -258,7 +262,7 @@ function createTestEnvironment(initialData = null) {
       getItem: (k) => store[k] || null,
       setItem: (k, v) => { store[k] = String(v); },
       removeItem: (k) => { delete store[k]; },
-      clear: () => { Object.keys(store).forEach(k => delete store[k]); }
+      clear: () => { Object.keys(store).forEach((k) => { delete store[k]; }); }
     },
     navigator: {
       clipboard: {
@@ -537,7 +541,7 @@ test('Tiket 08 - Isolasi modul: saringan log tidak mengubah Indeks maupun Todo',
   logSearchInput.trigger('input');
 
   const logList = env.getOrCreateElement('log-list');
-  assert.match(logList.innerHTML, /Tidak ada log cocok/, 'Saringan log harus bekerja');
+  assert.match(logList.innerHTML, /Tidak ada logbook cocok/, 'Saringan logbook harus bekerja');
 
   assert.equal(env.getOrCreateElement('todo-list').innerHTML, todoListBefore, 'Daftar Todo tidak boleh berubah');
   assert.equal(env.getOrCreateElement('result-list').innerHTML, resultListBefore, 'Daftar Indeks tidak boleh berubah');

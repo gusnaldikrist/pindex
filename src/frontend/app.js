@@ -1957,8 +1957,8 @@ async function confirmDestructive(config) {
     if (filteredLogs.length === 0) {
       const hasActiveFilter = state.logSearchQuery || state.logDateFrom || state.logDateTo;
       const emptyMessage = hasActiveFilter
-        ? 'Tidak ada log cocok. Coba kata lain atau ubah rentang tanggal.'
-        : 'Belum ada log. Catat aktivitas kerja harian Anda.';
+        ? 'Tidak ada logbook cocok. Coba kata lain atau ubah rentang tanggal.'
+        : 'Belum ada logbook. Catat aktivitas kerja harian Anda.';
       logListContainer.innerHTML = `
         <div class="result-empty" style="padding: 24px 0; text-align: center; color: var(--muted); font-size: var(--font-small);">
           ${emptyMessage}
@@ -2070,7 +2070,7 @@ async function confirmDestructive(config) {
     overlay.innerHTML = `
       <div class="modal-box" id="modal-log-box">
         <div class="modal-header">
-          <div class="modal-title">${isEdit ? 'Ubah Log' : 'Catat Log'}</div>
+          <div class="modal-title">${isEdit ? 'Ubah Logbook' : 'Catat Logbook'}</div>
           <button type="button" class="btn-close" id="btn-close-log-modal" aria-label="Tutup">&times;</button>
         </div>
         <div class="modal-body">
@@ -2081,8 +2081,8 @@ async function confirmDestructive(config) {
           </div>
 
           <div class="form-group">
-            <label class="form-label" for="log-text">Teks Log <span class="req">*</span></label>
-            <textarea id="log-text" class="form-textarea" maxlength="200" placeholder="Teks log (1-200 karakter)">${escapeHtml(initialText)}</textarea>
+            <label class="form-label" for="log-text">Teks logbook <span class="req">*</span></label>
+            <textarea id="log-text" class="form-textarea" maxlength="200" placeholder="Teks logbook (1-200 karakter)">${escapeHtml(initialText)}</textarea>
             <div id="log-text-error" class="form-error" style="display: none;"></div>
           </div>
 
@@ -2142,7 +2142,7 @@ async function confirmDestructive(config) {
       const textErrEl = document.getElementById('log-text-error');
       if (textErrEl) {
         if (textArea && textArea.value.length > 200) {
-          textErrEl.textContent = 'Teks log maksimal 200 karakter';
+          textErrEl.textContent = 'Teks logbook maksimal 200 karakter';
           textErrEl.style.display = 'block';
         } else {
           textErrEl.textContent = '';
@@ -2209,8 +2209,8 @@ async function confirmDestructive(config) {
 
   function showDeleteLogConfirmation(logEntry) {
     confirmDestructive({
-      title: 'Hapus Log',
-      warning: 'Menghapus log ini tidak akan menghapus item dokumen yang ditautkan.',
+      title: 'Hapus Logbook',
+      warning: 'Menghapus logbook ini tidak akan menghapus item dokumen yang ditautkan.',
       confirmPhrase: 'hapus',
       inputId: 'input-confirm-delete-log',
       confirmButtonId: 'btn-confirm-delete-log',
