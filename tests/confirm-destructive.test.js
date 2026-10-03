@@ -72,7 +72,10 @@ function createTestEnvironment(initialData = null) {
       set disabled(d) { disabled = Boolean(d); },
       get disabled() { return disabled; },
       dataset: {},
-      addEventListener(e, h) { (listeners[e] ||= []).push(h); },
+      addEventListener(e, h) {
+        if (!listeners[e]) listeners[e] = [];
+        listeners[e].push(h);
+      },
       trigger(e, d = {}) { for (const h of listeners[e] || []) h({ target: this, preventDefault() {}, ...d }); },
       focus() {}, select() {}
     });
@@ -102,7 +105,10 @@ function createTestEnvironment(initialData = null) {
         if (i !== -1) { activeModals.splice(i, 1); node.parentNode = null; }
       }
     },
-    addEventListener(e, h) { (docListeners[e] ||= []).push(h); },
+    addEventListener(e, h) {
+      if (!docListeners[e]) docListeners[e] = [];
+      docListeners[e].push(h);
+    },
     trigger: (e, d) => { for (const h of docListeners[e] || []) h(d); }
   };
 
@@ -156,7 +162,9 @@ test('confirmDestructive: tombol konfirmasi nonaktif sampai frasa diketik persis
   env.sandbox.confirmDestructive({ ...baseConfig, onConfirm: () => {} });
 
   assert.equal(env.activeModals.length, 1, 'Modal harus terbuka');
-  const input = env.getOrCreateElement('input-confirm-widget');
+  // Panggilannya tetap perlu walau hasilnya tidak dipakai: di DOM palsu,
+  // satu-satunya cara membuat elemen adalah memintanya.
+  env.getOrCreateElement('input-confirm-widget');
   const btn = env.getOrCreateElement('btn-confirm-widget');
 
   assert.equal(btn.disabled, true, 'Tombol harus nonaktif saat kosong');
@@ -291,8 +299,8 @@ test('showDeleteTodoConfirmation memakai module yang sama', async () => {
   env.sandbox.showDeleteTodoConfirmation(exampleData.todo[0]);
 
   assert.equal(env.activeModals.length, 1, 'Modal hapus todo harus terbuka');
-  assert.match(env.activeModals[0].innerHTML, /Hapus Todo/, 'Judul harus Hapus Todo');
-  assert.match(env.activeModals[0].innerHTML, /Menghapus todo ini/, 'Peringatan harus menyebut todo');
+  assert.match(env.activeModals[0].innerHTML, /Hapus TodoList/, 'Judul harus Hapus TodoList');
+  assert.match(env.activeModals[0].innerHTML, /Menghapus TodoList ini/, 'Peringatan harus menyebut TodoList');
 
   const input = env.getOrCreateElement('input-confirm-delete-todo');
   const btn = env.getOrCreateElement('btn-confirm-delete-todo');

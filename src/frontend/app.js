@@ -1527,9 +1527,9 @@ function filterLinkedRows(rows, items, query, spec) {
     const filteredTodos = filterTodos(allTodos, allItems, state.todoSearchQuery, state.todoFilterStatus);
 
     if (filteredTodos.length === 0) {
-      let emptyMessage = 'Belum ada todo. Tambahkan todo baru.';
+      let emptyMessage = 'Belum ada TodoList. Tambahkan TodoList baru.';
       if (state.todoSearchQuery || state.todoFilterStatus !== 'semua') {
-        emptyMessage = 'Tidak ada todo cocok. Coba kata lain atau tambahkan todo baru.';
+        emptyMessage = 'Tidak ada TodoList cocok. Coba kata lain atau tambahkan TodoList baru.';
       }
       todoListContainer.innerHTML = `
         <div class="result-empty" style="padding: 24px 0; text-align: center; color: var(--muted); font-size: var(--font-small);">
@@ -1653,13 +1653,13 @@ function filterLinkedRows(rows, items, query, spec) {
     overlay.innerHTML = `
       <div class="modal-box" id="modal-todo-box">
         <div class="modal-header">
-          <div class="modal-title">${isEdit ? 'Ubah Todo' : 'Tambah Todo'}</div>
+          <div class="modal-title">${isEdit ? 'Ubah TodoList' : 'Tambah TodoList'}</div>
           <button type="button" class="btn-close" id="btn-close-todo-modal" aria-label="Tutup">&times;</button>
         </div>
         <div class="modal-body">
           <div class="form-group">
-            <label class="form-label" for="todo-text">Teks Todo <span class="req">*</span></label>
-            <textarea id="todo-text" class="form-textarea" maxlength="200" placeholder="Teks todo (1-200 karakter)">${escapeHtml(initialText)}</textarea>
+            <label class="form-label" for="todo-text">Teks TodoList <span class="req">*</span></label>
+            <textarea id="todo-text" class="form-textarea" maxlength="200" placeholder="Teks TodoList (1-200 karakter)">${escapeHtml(initialText)}</textarea>
             <div id="todo-text-error" class="form-error" style="display: none;"></div>
           </div>
 
@@ -1709,7 +1709,7 @@ function filterLinkedRows(rows, items, query, spec) {
       const errorEl = document.getElementById('todo-text-error');
       if (errorEl) {
         if (textArea && textArea.value.length > 200) {
-          errorEl.textContent = 'Teks todo maksimal 200 karakter';
+          errorEl.textContent = 'Teks TodoList maksimal 200 karakter';
           errorEl.style.display = 'block';
         } else {
           errorEl.textContent = '';
@@ -1866,8 +1866,8 @@ async function confirmDestructive(config) {
 
   function showDeleteTodoConfirmation(todo) {
     confirmDestructive({
-      title: 'Hapus Todo',
-      warning: 'Menghapus todo ini tidak akan menghapus item dokumen yang ditautkan.',
+      title: 'Hapus TodoList',
+      warning: 'Menghapus TodoList ini tidak akan menghapus item dokumen yang ditautkan.',
       confirmPhrase: 'hapus',
       inputId: 'input-confirm-delete-todo',
       confirmButtonId: 'btn-confirm-delete-todo',
