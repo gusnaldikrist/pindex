@@ -432,7 +432,7 @@ test('Tiket 07 - Pengurutan: selesai di bawah, dan tanpa tenggat diurutkan waktu
     { id: 't-active-new', teks: 'Aktif Baru', done: false, updated_at: '2026-09-28' }
   ];
 
-  const sorted = filterTodos(testTodos, [], '', 'semua');
+  const sorted = filterTodos(testTodos, '', 'semua');
   assert.deepEqual(
     sorted.map(t => t.id),
     ['t-active-new', 't-active-old', 't-done-new', 't-done-old'],
@@ -453,19 +453,19 @@ test('Tiket 07 - Saringan Status: Semua, Belum, Selesai', async () => {
     { id: 't2', teks: 'Tugas 2', done: true, updated_at: '2026-09-29' }
   ];
 
-  const resSemua = filterTodos(testTodos, [], '', 'semua');
+  const resSemua = filterTodos(testTodos, '', 'semua');
   assert.equal(resSemua.length, 2);
 
-  const resBelum = filterTodos(testTodos, [], '', 'belum');
+  const resBelum = filterTodos(testTodos, '', 'belum');
   assert.equal(resBelum.length, 1);
   assert.equal(resBelum[0].id, 't1');
 
-  const resSelesai = filterTodos(testTodos, [], '', 'selesai');
+  const resSelesai = filterTodos(testTodos, '', 'selesai');
   assert.equal(resSelesai.length, 1);
   assert.equal(resSelesai[0].id, 't2');
 });
 
-test('Tiket 07 - Pencarian Tab Todo: teks todo dan judul item tertaut (aturan PRD 5.1)', async () => {
+test('Tiket 07 - Pencarian Tab Todo: teks todo memakai aturan PRD 5.1', async () => {
   const exampleData = JSON.parse(fs.readFileSync(exampleJsonPath, 'utf8'));
   const env = createTestEnvironment(exampleData);
   // detectStorageMode lalu loadData async sejak tiket 11
@@ -473,21 +473,21 @@ test('Tiket 07 - Pencarian Tab Todo: teks todo dan judul item tertaut (aturan PR
   await new Promise(resolve => setImmediate(resolve));
 
   const { filterTodos } = env.sandbox;
-  const items = exampleData.items;
-  const todos = exampleData.todo; // t1: "Validasi 20 draft - kumpul Jumat", item_id: "sheet-ta-admin"
+  const todos = exampleData.todo; // t1: "Validasi 20 draft - kumpul Jumat"
 
   // 1. Cari teks todo
-  const resTeks = filterTodos(todos, items, 'kumpul jumat', 'semua');
+  const resTeks = filterTodos(todos, 'kumpul jumat', 'semua');
   assert.equal(resTeks.length, 1);
   assert.equal(resTeks[0].id, 't1');
 
-  // 2. Cari judul item tertaut
-  const resItem = filterTodos(todos, items, 'sheet admin', 'semua');
-  assert.equal(resItem.length, 1, 'Ketik "sheet admin" harus mencocokkan todo yang menautkan Sheet Admin TA');
-
-  // 3. Frasa terbalik tidak cocok
-  const resInverse = filterTodos(todos, items, 'admin sheet', 'semua');
+  // 2. Frasa terbalik tidak cocok
+  const resInverse = filterTodos(todos, 'admin sheet', 'semua');
   assert.equal(resInverse.length, 0, 'Frasa terbalik tidak boleh cocok sesuai aturan PRD 5.1');
+
+  // 3. Judul item tidak lagi jadi sumber pencarian
+  const resItem = filterTodos(todos, 'sheet admin', 'semua');
+  assert.equal(resItem.length, 0,
+    'Judul item tidak lagi menemukan TodoList');
 });
 
 test('Tiket 07 - Tambah Todo: mengisi form, simpan, tersimpan di localStorage', async () => {
@@ -733,7 +733,7 @@ test('Tiket 01 - Urutan memakai deadline, bukan kapan terakhir disentuh', async 
     { id: 'nanti', teks: 'Nanti', done: false, deadline: '2099-01-01', updated_at: '2026-10-02' }
   ];
 
-  const sorted = filterTodos(testTodos, [], '', 'semua');
+  const sorted = filterTodos(testTodos, '', 'semua');
   assert.deepEqual(
     sorted.map(t => t.id),
     ['lewat', 'nanti', 'tanpa'],
@@ -752,7 +752,7 @@ test('Tiket 01 - Deadline sama dipecah oleh kapan terakhir disentuh', async () =
     { id: 'baru', teks: 'Baru', done: false, deadline: '2099-05-05', updated_at: '2026-09-01' }
   ];
 
-  const sorted = filterTodos(testTodos, [], '', 'semua');
+  const sorted = filterTodos(testTodos, '', 'semua');
   assert.deepEqual(sorted.map(t => t.id), ['baru', 'lama'],
     'Deadline sama harus punya urutan yang ditentukan, bukan acak');
 });
@@ -769,7 +769,7 @@ test('Tiket 01 - Deadline rusak dianggap tidak punya deadline', async () => {
     { id: 'kosong', teks: 'Kosong', done: false, deadline: '', updated_at: '2026-08-01' }
   ];
 
-  const sorted = filterTodos(testTodos, [], '', 'semua');
+  const sorted = filterTodos(testTodos, '', 'semua');
   assert.deepEqual(sorted.map(t => t.id), ['sah', 'rusak', 'kosong'],
     'Deadline rusak tidak boleh membuat daftar gagal; diperlakukan sebagai tidak punya tenggat');
 });
@@ -786,11 +786,11 @@ test('Tiket 01 - Urutan tetap benar saat disaring dan saat dicari', async () => 
     { id: 'selesai', teks: 'Opsi selesai', done: true, deadline: '2020-01-01', updated_at: '2026-01-01' }
   ];
 
-  const belum = filterTodos(testTodos, [], '', 'belum');
+  const belum = filterTodos(testTodos, '', 'belum');
   assert.deepEqual(belum.map(t => t.id), ['a-lewat', 'a-nanti'],
     'Saringan belum selesai tidak boleh mengubah urutan deadline');
 
-  const cari = filterTodos(testTodos, [], 'Opsi', 'semua');
+  const cari = filterTodos(testTodos, 'Opsi', 'semua');
   assert.deepEqual(cari.map(t => t.id), ['a-lewat', 'a-nanti', 'selesai'],
     'Pencarian tidak boleh mengacak urutan');
 });

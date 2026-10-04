@@ -371,7 +371,7 @@ test('Tiket 08 - Urutan tanggal menurun; tanggal sama diurutkan masukan terbaru'
     { id: 'l1', date: '2026-09-29', teks: 'Lebih lama di hari sama', item_id: null }
   ];
 
-  const sorted = filterLogs(logs, [], '', '', '');
+  const sorted = filterLogs(logs, '', '', '');
   assert.deepEqual(
     sorted.map(entry => entry.id),
     ['l3', 'l1', 'l2'],
@@ -392,16 +392,16 @@ test('Tiket 08 - Saringan rentang tanggal Dari dan Sampai', async () => {
     { id: 'l1', date: '2026-08-31', teks: 'Di luar batas bawah', item_id: null }
   ];
 
-  const hasil = filterLogs(logs, [], '', '2026-09-01', '2026-09-29');
+  const hasil = filterLogs(logs, '', '2026-09-01', '2026-09-29');
   assert.deepEqual(hasil.map(entry => entry.id), ['l2'], 'Hanya entri dalam rentang yang tampil');
 
-  const hasilDariSaja = filterLogs(logs, [], '', '2026-09-01', '');
+  const hasilDariSaja = filterLogs(logs, '', '2026-09-01', '');
   assert.deepEqual(hasilDariSaja.map(entry => entry.id), ['l3', 'l2'], 'Kotak Dari kosong untuk batas atas');
 
-  const hasilSampaiSaja = filterLogs(logs, [], '', '', '2026-09-29');
+  const hasilSampaiSaja = filterLogs(logs, '', '', '2026-09-29');
   assert.deepEqual(hasilSampaiSaja.map(entry => entry.id), ['l2', 'l1'], 'Kotak Sampai kosong untuk batas bawah');
 
-  assert.equal(filterLogs(logs, [], '', '', '').length, 3, 'Kedua kotak kosong menampilkan seluruh entri');
+  assert.equal(filterLogs(logs, '', '', '').length, 3, 'Kedua kotak kosong menampilkan seluruh entri');
 });
 
 test('Tiket 08 - Saringan teks log: frasa berurutan dan case-insensitive (PRD 5.1)', async () => {
@@ -416,66 +416,18 @@ test('Tiket 08 - Saringan teks log: frasa berurutan dan case-insensitive (PRD 5.
     { id: 'l1', date: '2026-09-29', teks: 'Input 20 data', item_id: null }
   ];
 
-  const hasil = filterLogs(logs, [], '  VALIDASI   draft  ', '', '');
+  const hasil = filterLogs(logs, '  VALIDASI   draft  ', '', '');
   assert.deepEqual(hasil.map(entry => entry.id), ['l2'], 'Spasi berlebih diabaikan dan huruf besar-kecil diabaikan');
 
-  const hasilTerbalik = filterLogs(logs, [], 'draft validasi', '', '');
+  const hasilTerbalik = filterLogs(logs, 'draft validasi', '', '');
   assert.equal(hasilTerbalik.length, 0, 'Frasa terbalik tidak boleh cocok');
 
   // Kata yang tidak berurutan (ada kata lain di antaranya) tidak boleh cocok
-  const hasilTerputus = filterLogs(logs, [], 'validasi data', '', '');
+  const hasilTerputus = filterLogs(logs, 'validasi data', '', '');
   assert.equal(hasilTerputus.length, 0, 'Kata yang tidak berurutan tidak boleh cocok');
 
-  const hasilKosong = filterLogs(logs, [], '   ', '', '');
+  const hasilKosong = filterLogs(logs, '   ', '', '');
   assert.equal(hasilKosong.length, 2, 'Kata kunci kosong tidak menyaring apa pun');
-});
-
-test('Tiket 08 - Saringan judul item tertaut', async () => {
-  const exampleData = JSON.parse(fs.readFileSync(exampleJsonPath, 'utf8'));
-  const env = createTestEnvironment(exampleData);
-  // detectStorageMode lalu loadData async sejak tiket 11
-  await new Promise(resolve => setImmediate(resolve));
-  await new Promise(resolve => setImmediate(resolve));
-
-  const { filterLogs } = env.sandbox;
-  const logs = exampleData.logs;
-  const items = exampleData.items;
-
-  const hasil = filterLogs(logs, items, 'sheet admin', '', '');
-  assert.equal(hasil.length, 1, 'Ketik "sheet admin" harus memunculkan log yang menautkan Sheet Admin TA');
-  assert.equal(hasil[0].id, 'l1');
-
-  const hasilTanpaTautan = filterLogs(logs, items, 'slims bulian', '', '');
-  assert.equal(hasilTanpaTautan.length, 0, 'Log l1 tidak menautkan SLiMS Bulian');
-});
-
-test('Tiket 08 - Verifikasi tiket #6: mengetik judul item tertaut di kotak cari memunculkan lognya', async () => {
-  const exampleData = JSON.parse(fs.readFileSync(exampleJsonPath, 'utf8'));
-  // Tambah satu log tanpa tautan sebagai kontrol: tidak boleh ikut tampil
-  exampleData.logs.push({ id: 'l2', date: '2026-09-28', item_id: null, teks: 'Validasi draft tanpa tautan' });
-  const env = createTestEnvironment(exampleData);
-  // detectStorageMode lalu loadData async sejak tiket 11
-  await new Promise(resolve => setImmediate(resolve));
-  await new Promise(resolve => setImmediate(resolve));
-
-  const { switchTab } = env.sandbox;
-  switchTab('log');
-
-  const logSearchInput = env.getOrCreateElement('log-search-input');
-  logSearchInput.value = 'sheet admin';
-  logSearchInput.trigger('input');
-
-  const logList = env.getOrCreateElement('log-list');
-  assert.deepEqual(
-    getRenderedLogIds(logList),
-    ['l1'],
-    'Ketik "sheet admin" harus menyisakan log l1 saja yang menautkan Sheet Admin TA'
-  );
-  assert.match(logList.innerHTML, /Input 20 data/, 'Log l1 harus benar-benar dirender');
-  assert.ok(
-    !logList.innerHTML.includes('Validasi draft tanpa tautan'),
-    'Log tanpa tautan tidak boleh ikut tampil'
-  );
 });
 
 test('Tiket 08 - Saringan log bertahan saat pindah tab (prd.md 5.6: kosong saat tab dibuka pertama kali)', async () => {

@@ -487,22 +487,6 @@
           state.data.items = state.data.items.filter(it => it.id !== item.id);
         }
 
-        if (state.data && Array.isArray(state.data.todo)) {
-          state.data.todo.forEach(todo => {
-            if (todo.item_id === item.id) {
-              todo.item_id = null;
-            }
-          });
-        }
-
-        if (state.data && Array.isArray(state.data.logs)) {
-          state.data.logs.forEach(logEntry => {
-            if (logEntry.item_id === item.id) {
-              logEntry.item_id = null;
-            }
-          });
-        }
-
         if (state.focusedItemId === item.id) {
           state.focusedItemId = null;
         }
@@ -1546,9 +1530,11 @@ function deadlineHariKe(deadline, todayString) {
    * @param {Function} spec.keep     (row) => boolean, saringan tambahan
    * @param {Function} spec.compare  (rowA, rowB) => number, pengurutan
    */
-function filterLinkedRows(rows, items, query, spec) {
+// Pencarian baris membaca teks baris saja. Sebelumnya teks itu dicocokkan
+  // dengan judul item yang tertaut pada baris; field itu sudah dibuang, jadi
+  // tidak ada lagi sumber kedua untuk keyword.
+  function filterLinkedRows(rows, query, spec) {
     const normalizedQuery = normalizeRowQuery(query);
-    const itemsMap = new Map((Array.isArray(items) ? items : []).map(item => [item.id, item]));
 
     const keep = spec.keep || (() => true);
     const compare = spec.compare || (() => 0);
@@ -1558,10 +1544,7 @@ function filterLinkedRows(rows, items, query, spec) {
       if (!normalizedQuery) return true;
 
       const rowText = normalizeRowQuery(row.teks);
-      const linkedItem = row.item_id ? itemsMap.get(row.item_id) : null;
-      const linkedItemTitle = linkedItem ? normalizeRowQuery(linkedItem.title) : '';
-
-      return rowText.includes(normalizedQuery) || linkedItemTitle.includes(normalizedQuery);
+      return rowText.includes(normalizedQuery);
     });
 
     // filter sudah menyalin, jadi sort di sini tidak menyentuh array pemanggil
@@ -1577,11 +1560,11 @@ function filterLinkedRows(rows, items, query, spec) {
     return String(queryString || '').trim().replace(/\s+/g, ' ').toLowerCase();
   }
 
-  function filterTodos(todos, items, query, filterStatus) {
+  function filterTodos(todos, query, filterStatus) {
     const hariIni = getTodayDateString();
     const berubahTerakhir = (a, b) => (b.updated_at || '').localeCompare(a.updated_at || '');
 
-    return filterLinkedRows(todos, items, query, {
+    return filterLinkedRows(todos, query, {
       keep(todo) {
         if (filterStatus === 'belum' && todo.done) return false;
         if (filterStatus === 'selesai' && !todo.done) return false;
@@ -1616,7 +1599,7 @@ function filterLinkedRows(rows, items, query, spec) {
     const allItems = (state.data && Array.isArray(state.data.items)) ? state.data.items : [];
     const itemsMap = new Map(allItems.map(item => [item.id, item]));
 
-    const filteredTodos = filterTodos(allTodos, allItems, state.todoSearchQuery, state.todoFilterStatus);
+    const filteredTodos = filterTodos(allTodos, state.todoSearchQuery, state.todoFilterStatus);
 
     if (filteredTodos.length === 0) {
       let emptyMessage = 'Belum ada TodoList. Tambahkan TodoList baru.';
@@ -1993,11 +1976,11 @@ async function confirmDestructive(config) {
     return `l${counter}`;
   }
 
-  function filterLogs(logs, items, query, dateFrom, dateTo) {
+  function filterLogs(logs, query, dateFrom, dateTo) {
     const fromValue = DATE_PATTERN.test(String(dateFrom || '')) ? String(dateFrom) : '';
     const toValue = DATE_PATTERN.test(String(dateTo || '')) ? String(dateTo) : '';
 
-    return filterLinkedRows(logs, items, query, {
+    return filterLinkedRows(logs, query, {
       keep(logEntry) {
         const entryDate = String(logEntry.date || '');
         if (fromValue && entryDate < fromValue) return false;
@@ -2018,7 +2001,7 @@ async function confirmDestructive(config) {
     const allItems = (state.data && Array.isArray(state.data.items)) ? state.data.items : [];
     const itemsMap = new Map(allItems.map(item => [item.id, item]));
 
-    const filteredLogs = filterLogs(allLogs, allItems, state.logSearchQuery, state.logDateFrom, state.logDateTo);
+    const filteredLogs = filterLogs(allLogs, state.logSearchQuery, state.logDateFrom, state.logDateTo);
 
     if (filteredLogs.length === 0) {
       const hasActiveFilter = state.logSearchQuery || state.logDateFrom || state.logDateTo;

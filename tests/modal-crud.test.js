@@ -466,7 +466,7 @@ test('Tiket 06 - Alur Ubah item: klik Ubah pada baris hasil, edit judul/catatan,
   assert.equal(updatedItem.catatan, 'Minta mahasiswa upload mandiri sebelum sidang');
 });
 
-test('Tiket 06 - Alur Hapus item: konfirmasi judul teks salah ditolak, judul benar menghapus item & melepas tautan todo/log', async () => {
+test('Tiket 06 - Alur Hapus item: konfirmasi judul teks salah ditolak, judul benar menghapus item tanpa menyentuh TodoList & Logbook', async () => {
   const exampleData = JSON.parse(fs.readFileSync(exampleJsonPath, 'utf8'));
   const env = createTestEnvironment(exampleData);
   // detectStorageMode lalu loadData async sejak tiket 11
@@ -527,15 +527,26 @@ test('Tiket 06 - Alur Hapus item: konfirmasi judul teks salah ditolak, judul ben
   const savedData = JSON.parse(env.store['indeks_v1']);
   assert.ok(!savedData.items.some(it => it.id === 'sheet-ta-admin'), 'Item sheet-ta-admin harus terhapus');
 
-  // Periksa todo yang sebelumnya terhubung ke sheet-ta-admin
+  // Periksa todo: harus tetap utuh, tidak ada lagi yang dilepas
   const relatedTodo = savedData.todo.find(t => t.id === 't1');
   assert.ok(relatedTodo, 'Todo t1 harus tetap ada');
-  assert.equal(relatedTodo.item_id, null, 'item_id pada todo t1 harus menjadi null');
+  assert.equal(relatedTodo.teks, 'Validasi 20 draft - kumpul Jumat',
+    'Teks TodoList harus utuh setelah item dihapus');
+  assert.equal(relatedTodo.deadline, '2026-10-03', 'Deadline TodoList harus utuh');
+  assert.equal(relatedTodo.done, false, 'Status TodoList harus utuh');
+  // Field yang menunjuk item harus tersimpan apa adanya. Kalau masih ada aturan
+  // yang melepasnya, nilainya jadi null di sini — dan itulah yang membuat
+  // penghapusan item diam-diam mengubah TodoList.
+  assert.equal(relatedTodo.item_id, 'sheet-ta-admin',
+    'Penunjuk item pada TodoList tidak boleh diubah oleh penghapusan item');
 
-  // Periksa log yang sebelumnya terhubung ke sheet-ta-admin
+  // Periksa log: harus tetap utuh, tidak ada lagi yang dilepas
   const relatedLog = savedData.logs.find(l => l.id === 'l1');
   assert.ok(relatedLog, 'Log l1 harus tetap ada');
-  assert.equal(relatedLog.item_id, null, 'item_id pada log l1 harus menjadi null');
+  assert.equal(relatedLog.teks, 'Input 20 data', 'Teks logbook harus utuh setelah item dihapus');
+  assert.equal(relatedLog.date, '2026-09-29', 'Tanggal logbook harus utuh');
+  assert.equal(relatedLog.item_id, 'sheet-ta-admin',
+    'Penunjuk item pada logbook tidak boleh diubah oleh penghapusan item');
 });
 
 test('Tiket 06 - Validasi CSS: modal lebar 640px, baris search dan tambah, tombol teks destruktif tanpa kotak', () => {
