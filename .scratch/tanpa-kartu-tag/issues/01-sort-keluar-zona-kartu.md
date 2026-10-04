@@ -13,7 +13,7 @@ masih ada seperti sekarang.
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** done (2026-10-03)
 
 - [ ] Pengatur urutan ada di markup baris kendali Indeks, bukan di dalam zona Kartu.
 - [ ] Pengatur urutan tetap ada dan tetap bisa dipakai saat data memiliki `pinned_tags` kosong. Inilah kondisi yang menyembunyikannya, jadi pengujian dengan data kosong adalah pengujian yang menentukan.

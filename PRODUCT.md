@@ -41,7 +41,7 @@ Isi data tidak boleh diubah oleh keputusan visual. Bentuk field, validasi, dan p
 
 ## Brand Commitments
 
-Nama produk: **Penanda**. Bahasa antarmuka: Indonesia. Istilah domain: item, tag, pinned_tags, todo, log. Area status memakai pola `Penanda - N item - HH:MM`.
+Nama produk: **Penanda**. Bahasa antarmuka: Indonesia. Istilah domain: item, tag, todo, log, sop. Area status memakai pola `Penanda - N item - HH:MM`.
 
 Referensi visual yang disepakati sebelumnya: token diekstrak dari desain UI Thesis Search (SUAKA). Kayu itu tetap tercatat sebagai asal token, bukan sebagai kewajiban tampilan.
 

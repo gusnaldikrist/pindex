@@ -7,7 +7,7 @@ secara diam-diam.
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** done (2026-10-03)
 
 - [ ] Form item menampilkan seluruh tag yang sedang terpakai di data sebagai saran yang bisa dipilih.
 - [ ] Daftar saran dibuang duplikatnya dan ditulis dalam huruf kecil yang sama seperti yang disimpan, sehingga yang diketik apa adanya tersimpan.

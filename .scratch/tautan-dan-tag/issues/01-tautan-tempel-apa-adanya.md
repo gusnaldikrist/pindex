@@ -8,7 +8,7 @@ sudah tersimpan rusak, tanpa perlu menyentuh berkas data.
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** done (2026-10-03)
 
 - [ ] URL yang sudah punya skema dibiarkan apa adanya.
 - [ ] URL yang berbentuk domain telanjang mendapat awalan yang membuatnya bisa dibuka, dan tautan itu terbuka dengan benar, bukan diperlakukan sebagai path relatif oleh peramban.

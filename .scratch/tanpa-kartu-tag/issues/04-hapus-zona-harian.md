@@ -17,7 +17,7 @@ yang hanya bisa ditemukan orang yang kebetulan sudah tahu.
 
 **Blocked by:** 03 (Field `pinned_tags` Dibuang dari Skema Data).
 
-**Status:** ready-for-agent
+**Status:** done (2026-10-03)
 
 - [ ] Baris Harian tidak ada lagi di markup Indeks, dan penanda `HARIAN` tidak muncul di layar itu.
 - [ ] Fungsi perender baris Harian beserta handler klik chip-nya dibuang.

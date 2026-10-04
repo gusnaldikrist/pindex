@@ -11,7 +11,7 @@ dan baru dibuang pada tiket 03, supaya kedua langkah bisa diuji terpisah.
 
 **Blocked by:** 01 (Pengatur Urutan Keluar dari Zona Kartu).
 
-**Status:** ready-for-agent
+**Status:** done (2026-10-03)
 
 - [ ] Zona Kartu tidak ada lagi di markup Indeks, dan penanda `KARTU` tidak muncul di mana pun pada layar itu.
 - [ ] Keadaan penyaring tag tidak lagi ada di state aplikasi.

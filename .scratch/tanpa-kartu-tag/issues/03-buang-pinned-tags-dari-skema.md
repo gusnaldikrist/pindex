@@ -12,7 +12,7 @@ pada simpan berikutnya.
 
 **Blocked by:** None (dapat berjalan paralel dengan tiket 01 dan 02).
 
-**Status:** ready-for-agent
+**Status:** done (2026-10-03)
 
 - [ ] Keadaan awal frontend dan normalisasi data berhenti menyebut field itu.
 - [ ] Validasi import frontend tidak lagi mewajibkan field itu, dan berkas tanpa field itu tetap diterima.

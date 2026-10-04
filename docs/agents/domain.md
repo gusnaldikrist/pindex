@@ -39,7 +39,7 @@ yang benar-benar matang.
 ## Pakai kosakata yang sudah ada
 
 Istilah domain Penanda sudah dipakai di kode dan di PRD: **item**, **tag**,
-**pinned_tags**, **todo**, **log**, **backend**, **satuan data**. Pertahankan
+**todo**, **log**, **sop**, **backend**, **satuan data**. Pertahankan
 kosakata itu; jangan mengarang sinonim.
 
 Definisi lengkap ada di `prd.md` dan `prd-skema.md` di vault. Bila istilah yang
@@ -58,7 +58,7 @@ secara eksplisit alih-alih menimpanya diam-diam. Keputusan Penanda ada di
 
 ## Catatan proyek
 
-- Istilah domain (item, tag, pinned_tags, todo, log) berasal dari `prd.md` dan
+- Istilah domain (item, tag, todo, log, sop) berasal dari `prd.md` dan
   `prd-skema.md`. Jangan menambah istilah baru tanpa menyentuh PRD itu.
 - Keputusan arsitektur dicatat di vault Obsidian (`decisions.md`), bukan di
   `docs/adr/` repo ini. Alasannya: dokumen produk tinggal di vault supaya

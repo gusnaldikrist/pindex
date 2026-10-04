@@ -19,7 +19,7 @@ tetap diuji.
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** done (2026-10-03)
 
 - [ ] Tugas yang belum selesai dan punya deadline tampil berurutan deadline menaik, dan tanggal yang sama dipecah oleh kapan terakhir disentuh, menurun.
 - [ ] Tugas yang sudah lewat tampil sebelum tugas yang jatuh tempo di masa depan, tanpa aturan khusus untuk keadaan lewat.
