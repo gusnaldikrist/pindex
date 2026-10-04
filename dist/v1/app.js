@@ -694,7 +694,9 @@
         if (formLink.label || formLink.url) {
           hasAnyLinkInput = true;
         }
-        if (!formLink.label || !formLink.url || formLink.label.length > 40) {
+        // Label tidak lagi wajib: yang ditempel orang biasanya URL-nya saja. Yang
+        // tetap wajib adalah URL-nya, karena tanpa itu tidak ada yang dibuka.
+        if (!formLink.url || formLink.label.length > 40) {
           linksValid = false;
         }
       }
@@ -796,7 +798,12 @@
         // berhenti di sini kalau ada yang lolos, misalnya nilai yang
         // disisipkan lewat skrip dan bukan diketik.
         if (!validateSop(cleanSop).valid) return;
-        const cleanLinks = getFormLinks().filter(itemLink => itemLink.label && itemLink.url);
+        // URL mentah tetap disimpan mentah: yang diberi awalan hanya nilai yang
+        // dipakai untuk membuka dan menyalin, sehingga berkas data pengguna
+        // tidak pernah ditulis ulang karena perbaikan tampilan.
+        const cleanLinks = getFormLinks()
+          .filter(itemLink => itemLink.url)
+          .map(itemLink => ({ label: isiTautan(itemLink).label, url: itemLink.url }));
         const today = getTodayDateString();
 
         const items = (state.data && Array.isArray(state.data.items)) ? state.data.items : [];
@@ -842,13 +849,46 @@
     }
   }
 
-  function getPrimaryLinkInfo(item) {
-    const primaryLink = (item && Array.isArray(item.links) && item.links.length > 0) ? item.links[0] : null;
-    const url = primaryLink ? (primaryLink.url || '') : '';
-    const label = primaryLink ? (primaryLink.label || 'Buka Link') : 'Buka Link';
-    const isLocal = storage.isLocalPath(url);
-    return { link: primaryLink, url, label, isLocal };
-  }
+  // Satu tempat memutuskan nilai tautan mana yang bisa dipakai. Tabel, panel,
+// item terkait, dan tombol salin semuanya membaca dari sini.
+//
+// Menempel `docs.google.com/x` tanpa skema akan diperlakukan peramban sebagai
+// path relatif terhadap localhost, jadi tautannya mati tanpa pesan sama sekali.
+// URL berskema dan path lokal tidak boleh disentuh: path lokal justru dibuka
+// lewat backend, bukan lewat peramban.
+function normalisasiTautan(url) {
+  const mentah = (url === null || url === undefined) ? '' : String(url).trim();
+  if (mentah === '') return { url: '', isLocal: false };
+  if (storage.isLocalPath(mentah)) return { url: mentah, isLocal: true };
+  if (/^[a-z][a-z0-9+.-]*:/i.test(mentah)) return { url: mentah, isLocal: false };
+  return { url: 'https://' + mentah, isLocal: false };
+}
+
+// Label tautan boleh kosong, karena yang ditempel orang biasanya URL-nya saja.
+// Kalau kosong, label diambil dari URL supaya tetap terbaca di panel. Label yang
+// ditulis sendiri tidak pernah ditimpa.
+function labelDariUrl(url) {
+  const teks = String(url || '').replace(/\/+$/, '');
+  const bagian = teks.split(/[\\/]/);
+  return String(bagian.length ? bagian.at(-1) : teks).slice(0, 40);
+}
+
+function isiTautan(link) {
+  const asal = link || {};
+  const hasil = normalisasiTautan(asal.url);
+  const labelSendiri = asal.label === null || asal.label === undefined ? '' : String(asal.label).trim();
+  return {
+    url: hasil.url,
+    label: labelSendiri !== '' ? labelSendiri : labelDariUrl(hasil.url)
+  };
+}
+
+function getPrimaryLinkInfo(item) {
+  const primaryLink = (item && Array.isArray(item.links) && item.links.length > 0) ? item.links[0] : null;
+  const hasil = normalisasiTautan(primaryLink && primaryLink.url);
+  const isi = isiTautan(primaryLink);
+  return { link: primaryLink, url: hasil.url, label: isi.label || 'Buka Link', isLocal: hasil.isLocal };
+}
 
   // Bobot tiap tag dibalik terhadap frekuensinya. Tag yang dipakai banyak item
   // hampir tidak membedakan satu item dari yang lain, jadi tidak boleh
@@ -982,9 +1022,11 @@
         <div class="panel-bagian-judul">TAUTAN</div>
         <ul class="panel-tautan">
           ${links.map(link => {
-            const url = String(link.url);
-            const label = link.label ? String(link.label) : 'Buka Link';
-            const isLocal = storage.isLocalPath(url);
+            const hasil = normalisasiTautan(link.url);
+            const isi = isiTautan(link);
+            const url = hasil.url;
+            const label = isi.label || 'Buka Link';
+            const isLocal = hasil.isLocal;
             // Path lokal tidak bisa dibuka peramban, jadi pakai tombol yang
             // minta backend membukanya. Tautan web cukup elemen a biasa.
             const buka = isLocal
@@ -1423,7 +1465,7 @@ const ubahBtn = e.target.closest('.panel-ubah');
 //
 // Satu definisi ini dipakai penghitungan label dan pengurutan, supaya keduanya
 // tidak bisa berbeda pendapat tentang satu baris. Memakai Date.UTC, bukan
-//构造 objek tanggal lokal, supaya selisihnya tidak ikut berubah saat zona waktu
+  // objek tanggal lokal, supaya selisihnya tidak ikut berubah saat zona waktu
 // atau daylight saving bergerak.
 function deadlineHariKe(deadline, todayString) {
     const mentah = deadline ? String(deadline) : '';
@@ -2698,6 +2740,8 @@ async function confirmDestructive(config) {
     loadData,
     switchTab,
     generateItemId,
+    normalisasiTautan,
+    isiTautan,
     validateTags,
     validateSop,
     openItemModal,

@@ -672,3 +672,150 @@ test('Tiket 06 - Verifikasi Fix Review: Tombol Escape saat modal terbuka tidak m
   env.triggerDoc('keydown', { key: 'Escape' });
   assert.equal(env.activeModals.length, 1, 'Modal harus tetap terbuka saat Escape ditekan sesuai wireframe §8');
 });
+
+// Menempel domain telanjang harusnya tetap jadi tautan yang bisa dibuka.
+// Tanpa ini, peramban memperlakukannya sebagai path relatif dan tautannya
+// mati tanpa pesan apa pun.
+test('Tiket 01 - Awalan tautan hanya untuk domain telanjang', async () => {
+  const env = createTestEnvironment();
+  await new Promise(resolve => setImmediate(resolve));
+  await new Promise(resolve => setImmediate(resolve));
+  const { normalisasiTautan } = env.sandbox;
+
+  const BS = String.fromCharCode(92);
+  const pathDrive = 'D:' + BS + 'Arsip' + BS + 'SK.xlsx';
+  const pathUnc = BS + BS + 'server' + BS + 'share' + BS + 'x.docx';
+
+  assert.equal(normalisasiTautan('https://lib.uniga.ac.id/x').url, 'https://lib.uniga.ac.id/x',
+    'URL berskema dibiarkan apa adanya');
+  assert.equal(normalisasiTautan('http://localhost:8089/bulian').url, 'http://localhost:8089/bulian',
+    'Skema http juga dibiarkan');
+
+  assert.equal(normalisasiTautan('docs.google.com/spreadsheets/d/abc').url,
+    'https://docs.google.com/spreadsheets/d/abc', 'Domain telanjang dapat awalan');
+  assert.equal(normalisasiTautan('  lib.uniga.ac.id  ').url, 'https://lib.uniga.ac.id',
+    'Domain telanjang yang dikelilingi spasi juga dapat awalan dan jadi rapi');
+
+  assert.equal(normalisasiTautan(pathDrive).url, pathDrive, 'Path drive tidak boleh mendapat awalan');
+  assert.equal(normalisasiTautan('D:').url, 'D:', 'Drive tanpa path tetap sah');
+  assert.equal(normalisasiTautan(pathUnc).url, pathUnc, 'Path UNC tidak boleh mendapat awalan');
+  assert.equal(normalisasiTautan('file:///D:/arsip/sk.xlsx').url, 'file:///D:/arsip/sk.xlsx',
+    'Skema file tidak boleh mendapat awalan');
+
+  assert.equal(normalisasiTautan(pathDrive).isLocal, true, 'Path drive tetap ditandai lokal');
+  assert.equal(normalisasiTautan(pathUnc).isLocal, true, 'Path UNC tetap ditandai lokal');
+  assert.equal(normalisasiTautan('D:').isLocal, true, 'Drive tanpa path tetap lokal');
+  assert.equal(normalisasiTautan('example.com').isLocal, false, 'Domain telanjang bukan path lokal');
+});
+
+test('Tiket 01 - Label tautan boleh kosong dan diisi dari URL', () => {
+  const env = createTestEnvironment();
+  const { isiTautan } = env.sandbox;
+
+  const tanpaLabel = isiTautan({ url: 'https://lib.uniga.ac.id/publikasi' });
+  assert.ok(tanpaLabel.url.startsWith('https://'), 'URL tetap dipakai');
+  assert.ok(tanpaLabel.label && tanpaLabel.label.length > 0, 'Label harus terisi dari URL');
+
+  const berlabel = isiTautan({ label: 'Katalog', url: 'https://lib.uniga.ac.id' });
+  assert.equal(berlabel.label, 'Katalog', 'Label yang ditulis sendiri tidak boleh ditimpa');
+});
+
+
+// Tautan yang sudah tersimpan rusak sebelum ada perbaikan ini harus ikut
+// bisa dibuka dan disalin, tanpa berkas data ditulis ulang.
+test('Tiket 01 - Tautan lama tanpa skema ikut bisa dibuka dan disalin', async () => {
+  const BS = String.fromCharCode(92);
+  const rusak = {
+    version: 1,
+    items: [{
+      id: 'lama',
+      title: 'Dokumen Lama',
+      tags: ['arsip'],
+      links: [{ url: "lib.uniga.ac.id/publikasi" }],
+      catatan: '',
+      updated_at: '2026-01-01'
+    }],
+    todo: [],
+    logs: []
+  };
+
+  const env = createTestEnvironment(rusak);
+  await new Promise(resolve => setImmediate(resolve));
+  await new Promise(resolve => setImmediate(resolve));
+
+  // Tabel: tautan harus punya awalan, bukan	path relatif
+  const resultList = env.getOrCreateElement('result-list');
+  assert.match(resultList.innerHTML, /href="https:\/\/lib\.uniga\.ac\.id\/publikasi"/,
+    'Tautan di tabel harus dapat awalan');
+
+  // Data di berkas tidak boleh ikut ditulis ulang: URL tetap mentah dan label
+  // yang dulu tidak ada tetap tidak ada. Label hanya diisi saat ditampilkan.
+  const tersimpan = JSON.parse(env.store['indeks_v1']);
+  assert.equal(tersimpan.items[0].links[0].url, 'lib.uniga.ac.id/publikasi',
+    'Nilai mentah di berkas data tidak boleh diubah');
+  assert.equal('label' in tersimpan.items[0].links[0], false,
+    'Label tidak boleh disisipkan ke berkas data');
+
+  // Panel harus menunjukkan hal yang sama
+  const panel = env.getOrCreateElement('panel-inspeksi');
+  env.getOrCreateElement('result-list').trigger('click', {
+    target: {
+      closest: (sel) => {
+        if (sel === '.btn-copy' || sel === '.btn-buka') return null;
+        if (sel === '.baris-tabel') {
+          return { getAttribute: (a) => (a === 'data-id' ? 'lama' : null) };
+        }
+        return null;
+      }
+    }
+  });
+  assert.match(panel.innerHTML, /https:\/\/lib\.uniga\.ac\.id\/publikasi/,
+    'Tautan di panel harus dapat awalan yang sama');
+
+  // Tombol salin harus menyalin bentuk yang bisa dibuka
+  const salin = [...panel.innerHTML.matchAll(/data-url="([^"]*)"/g)].map(m => m[1]);
+  assert.ok(salin.includes('https://lib.uniga.ac.id/publikasi'),
+    'Tombol salin harus membawa URL yang bisa dibuka');
+  void BS;
+});
+
+// Jalur simpan adalah tempat dua aturan terakhir hidup: label tidak lagi
+// mewajibkan isi, dan tautan tanpa label tidak lagi dibuang. Tanpa
+// pengujian di sini, kedua aturan itu bisa dibalik tanpa ada yang gagal.
+test('Tiket 01 - Tautan tanpa label tetap tersimpan, dan labelnya terisi dari URL', async () => {
+  const exampleData = JSON.parse(fs.readFileSync(exampleJsonPath, 'utf8'));
+  const env = createTestEnvironment(exampleData);
+  await new Promise(resolve => setImmediate(resolve));
+  await new Promise(resolve => setImmediate(resolve));
+
+  env.getOrCreateElement('btn-tambah-item').trigger('click');
+  await new Promise(resolve => setImmediate(resolve));
+  await new Promise(resolve => setImmediate(resolve));
+
+  env.getOrCreateElement('item-title').value = 'Pedoman Mutu';
+  env.getOrCreateElement('item-title').trigger('input');
+  env.getOrCreateElement('item-tags').value = 'pedoman, mutu';
+  env.getOrCreateElement('item-tags').trigger('input');
+
+  // Hanya URL, tanpa label sama sekali
+  env.getOrCreateElement('link-label-0').value = '';
+  env.getOrCreateElement('link-label-0').trigger('input');
+  env.getOrCreateElement('link-url-0').value = 'lib.uniga.ac.id/pedoman';
+  env.getOrCreateElement('link-url-0').trigger('input');
+
+  const saveBtn = env.getOrCreateElement('btn-item-save');
+  assert.equal(saveBtn.disabled, false, 'Tombol simpan harus hidup walau label tautan kosong');
+
+  saveBtn.trigger('click');
+  await new Promise(resolve => setImmediate(resolve));
+  await new Promise(resolve => setImmediate(resolve));
+
+  const tersimpan = JSON.parse(env.store['indeks_v1']);
+  const baru = tersimpan.items.find(it => it.title === 'Pedoman Mutu');
+  assert.ok(baru, 'Item baru harus tersimpan');
+  assert.equal(baru.links.length, 1, 'Tautan tanpa label tidak boleh dibuang');
+  assert.equal(baru.links[0].url, 'lib.uniga.ac.id/pedoman',
+    'URL mentah harus tetap tersimpan tanpa awalan');
+  assert.equal(baru.links[0].label, 'pedoman',
+    'Label harus diambil dari bagian terakhir URL');
+});
