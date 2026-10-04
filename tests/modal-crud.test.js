@@ -151,13 +151,15 @@ function createTestEnvironment(initialData = null) {
       },
       trigger: (event, payload = {}) => {
         if (listeners[event]) {
-          listeners[event].forEach(fn => fn({
-            target: el,
-            currentTarget: el,
-            preventDefault: () => {},
-            stopPropagation: () => {},
-            ...payload
-          }));
+          listeners[event].forEach((fn) => {
+            fn({
+              target: el,
+              currentTarget: el,
+              preventDefault: () => {},
+              stopPropagation: () => {},
+              ...payload
+            });
+          });
         }
       }
     };
@@ -241,11 +243,13 @@ function createTestEnvironment(initialData = null) {
     },
     trigger: (event, payload = {}) => {
       if (docListeners[event]) {
-        docListeners[event].forEach(fn => fn({
-          preventDefault: () => {},
-          stopPropagation: () => {},
-          ...payload
-        }));
+        docListeners[event].forEach((fn) => {
+          fn({
+            preventDefault: () => {},
+            stopPropagation: () => {},
+            ...payload
+          });
+        });
       }
     }
   };
@@ -534,19 +538,18 @@ test('Tiket 06 - Alur Hapus item: konfirmasi judul teks salah ditolak, judul ben
     'Teks TodoList harus utuh setelah item dihapus');
   assert.equal(relatedTodo.deadline, '2026-10-03', 'Deadline TodoList harus utuh');
   assert.equal(relatedTodo.done, false, 'Status TodoList harus utuh');
-  // Field yang menunjuk item harus tersimpan apa adanya. Kalau masih ada aturan
-  // yang melepasnya, nilainya jadi null di sini — dan itulah yang membuat
-  // penghapusan item diam-diam mengubah TodoList.
-  assert.equal(relatedTodo.item_id, 'sheet-ta-admin',
-    'Penunjuk item pada TodoList tidak boleh diubah oleh penghapusan item');
+  // Penunjuk item sudah dibuang dari bentuk entri, jadi penghapusan item
+  // tidak punya apa pun untuk dilepas sama sekali.
+  assert.equal('item_id' in relatedTodo, false,
+    'Bentuk TodoList tidak lagi memuat penunjuk item');
 
   // Periksa log: harus tetap utuh, tidak ada lagi yang dilepas
   const relatedLog = savedData.logs.find(l => l.id === 'l1');
   assert.ok(relatedLog, 'Log l1 harus tetap ada');
   assert.equal(relatedLog.teks, 'Input 20 data', 'Teks logbook harus utuh setelah item dihapus');
   assert.equal(relatedLog.date, '2026-09-29', 'Tanggal logbook harus utuh');
-  assert.equal(relatedLog.item_id, 'sheet-ta-admin',
-    'Penunjuk item pada logbook tidak boleh diubah oleh penghapusan item');
+  assert.equal('item_id' in relatedLog, false,
+    'Bentuk logbook tidak lagi memuat penunjuk item');
 });
 
 test('Tiket 06 - Validasi CSS: modal lebar 640px, baris search dan tambah, tombol teks destruktif tanpa kotak', () => {
@@ -884,4 +887,44 @@ test('Tiket 02 - Saran tag memuat setiap tag yang terpakai, tidak memuat yang la
 
   // Tidak ada duplikat
   assert.equal(new Set(saran).size, saran.length, 'Saran tidak boleh punya duplikat');
+});
+
+// Tiket 02: kolom pemilihan item menutup hilang dari form, dan hasil simpan
+// tidak lagi membawa penunjuk item. Tes bentuk ini yang membuktikan perubahan
+// terjadi, bukan hanya tampilan yang hilang.
+test('Tiket 02 - Form dan hasil simpan tidak lagi membawa item tertaut', async () => {
+  const exampleData = JSON.parse(fs.readFileSync(exampleJsonPath, 'utf8'));
+  const env = createTestEnvironment(exampleData);
+  await new Promise(resolve => setImmediate(resolve));
+  await new Promise(resolve => setImmediate(resolve));
+
+  env.getOrCreateElement('btn-tambah-item').trigger('click');
+  await new Promise(resolve => setImmediate(resolve));
+  await new Promise(resolve => setImmediate(resolve));
+
+  const modal = env.activeModals[0];
+  assert.ok(modal, 'Modal tambah item harus terbuka');
+  assert.doesNotMatch(modal.innerHTML, /todo-item-id/,
+    'Form item tidak lagi memilih item tertaut');
+  assert.doesNotMatch(modal.innerHTML, /Tanpa tautan/,
+    'Kalimat tanpa tautan tidak lagi muncul di form');
+
+  env.getOrCreateElement('item-title').value = 'Pedoman Mutu';
+  env.getOrCreateElement('item-title').trigger('input');
+  env.getOrCreateElement('item-tags').value = 'pedoman';
+  env.getOrCreateElement('item-tags').trigger('input');
+  env.getOrCreateElement('link-label-0').value = 'Buka';
+  env.getOrCreateElement('link-label-0').trigger('input');
+  env.getOrCreateElement('link-url-0').value = 'https://contoh.test/pedoman';
+  env.getOrCreateElement('link-url-0').trigger('input');
+
+  env.getOrCreateElement('btn-item-save').trigger('click');
+  await new Promise(resolve => setImmediate(resolve));
+  await new Promise(resolve => setImmediate(resolve));
+
+  const tersimpan = JSON.parse(env.store['indeks_v1']);
+  const baru = tersimpan.items.find(it => it.title === 'Pedoman Mutu');
+  assert.ok(baru, 'Item baru harus tersimpan');
+  assert.equal('item_id' in baru, false,
+    'Penunjuk item tidak boleh ikut tersimpan');
 });

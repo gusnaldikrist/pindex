@@ -379,7 +379,6 @@ test('Tiket 07 - Render awal tab Todo dari data.example.json', async () => {
 
   const todoList = env.getOrCreateElement('todo-list');
   assert.match(todoList.innerHTML, /Validasi 20 draft - kumpul Jumat/, 'Teks todo t1 harus muncul di daftar');
-  assert.match(todoList.innerHTML, /Sheet Admin TA/, 'Nama item tertaut Sheet Admin TA harus muncul');
   assert.match(todoList.innerHTML, /badge-status/, 'Badge status harus muncul');
 });
 
@@ -505,7 +504,6 @@ test('Tiket 07 - Tambah Todo: mengisi form, simpan, tersimpan di localStorage', 
 
   const textArea = env.getOrCreateElement('todo-text');
   const deadlineInput = env.getOrCreateElement('todo-deadline');
-  const itemSelect = env.getOrCreateElement('todo-item-id');
   const saveBtn = env.getOrCreateElement('btn-todo-save');
 
   assert.equal(saveBtn.disabled, true, 'Tombol simpan harus nonaktif jika teks kosong');
@@ -515,7 +513,6 @@ test('Tiket 07 - Tambah Todo: mengisi form, simpan, tersimpan di localStorage', 
   assert.equal(saveBtn.disabled, false, 'Tombol simpan harus aktif setelah teks diisi');
 
   deadlineInput.value = '2026-10-15';
-  itemSelect.value = 'repo-uniga';
 
   saveBtn.trigger('click');
   // saveData async sejak tiket 11
@@ -528,7 +525,7 @@ test('Tiket 07 - Tambah Todo: mengisi form, simpan, tersimpan di localStorage', 
   assert.ok(addedTodo, 'Todo baru harus tersimpan');
   assert.equal(addedTodo.id, 't2', 'ID todo baru harus berurutan (t2)');
   assert.equal(addedTodo.deadline, '2026-10-15');
-  assert.equal(addedTodo.item_id, 'repo-uniga');
+  assert.equal('item_id' in addedTodo, false, 'Bentuk TodoList tidak lagi memuat penunjuk item');
   assert.equal(addedTodo.done, false);
 });
 
@@ -601,22 +598,6 @@ test('Tiket 07 - Hapus Todo: friksi ketik "hapus" menghapus todo tanpa menghapus
   const savedData = JSON.parse(env.store['indeks_v1']);
   assert.ok(!savedData.todo.some(t => t.id === 't1'), 'Todo t1 harus terhapus');
   assert.ok(savedData.items.some(it => it.id === 'sheet-ta-admin'), 'Item tertaut Sheet Admin TA TIDAK boleh terhapus');
-});
-
-test('Tiket 07 - Item tertaut terhapus: todo tetap ada dengan label "tanpa tautan"', async () => {
-  const exampleData = JSON.parse(fs.readFileSync(exampleJsonPath, 'utf8'));
-  // Ubah item_id menjadi null
-  exampleData.todo[0].item_id = null;
-  const env = createTestEnvironment(exampleData);
-  // detectStorageMode lalu loadData async sejak tiket 11
-  await new Promise(resolve => setImmediate(resolve));
-  await new Promise(resolve => setImmediate(resolve));
-
-  const { switchTab } = env.sandbox;
-  switchTab('todo');
-
-  const todoList = env.getOrCreateElement('todo-list');
-  assert.match(todoList.innerHTML, /tanpa tautan/, 'Todo dengan item_id null harus memuat teks "tanpa tautan"');
 });
 
 test('Tiket 07 - Retensi modal saat penyimpanan gagal (wireframe §5)', async () => {

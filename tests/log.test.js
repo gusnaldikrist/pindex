@@ -332,7 +332,7 @@ test('Tiket 08 - Render awal tab Log dari data.example.json', async () => {
   const logList = env.getOrCreateElement('log-list');
   assert.match(logList.innerHTML, /2026-09-29/, 'Kolom tanggal harus tampil');
   assert.match(logList.innerHTML, /Input 20 data/, 'Teks log l1 harus muncul');
-  assert.match(logList.innerHTML, /Sheet Admin TA/, 'Nama item tertaut harus muncul');
+
   assert.match(logList.innerHTML, /log-date-cell/, 'Tanggal harus memakai kolom tetap di kiri');
   assert.match(logList.innerHTML, /btn-ubah-log/, 'Tombol Ubah harus ada');
   assert.match(logList.innerHTML, /btn-hapus-log/, 'Tombol Hapus harus ada');
@@ -545,7 +545,7 @@ test('Tiket 08 - Catat entri baru: tanggal default hari ini dan muncul di baris 
 
   const dateInput = env.getOrCreateElement('log-date');
   const textArea = env.getOrCreateElement('log-text');
-  const itemSelect = env.getOrCreateElement('log-item-id');
+
   const saveBtn = env.getOrCreateElement('btn-log-save');
 
   assert.equal(dateInput.value, getTodayString(), 'Tanggal harus default ke hari ini');
@@ -555,7 +555,6 @@ test('Tiket 08 - Catat entri baru: tanggal default hari ini dan muncul di baris 
   textArea.trigger('input');
   assert.equal(saveBtn.disabled, false, 'Tombol Simpan aktif setelah teks diisi');
 
-  itemSelect.value = 'repo-uniga';
   saveBtn.trigger('click');
   // saveData async sejak tiket 11
   await new Promise(resolve => setImmediate(resolve));
@@ -566,7 +565,7 @@ test('Tiket 08 - Catat entri baru: tanggal default hari ini dan muncul di baris 
   const addedLog = savedData.logs.find(entry => entry.teks === 'Rapat koordinasi anggaran');
   assert.ok(addedLog, 'Entri log baru harus tersimpan');
   assert.equal(addedLog.id, 'l2', 'ID log baru harus berurutan (l2)');
-  assert.equal(addedLog.item_id, 'repo-uniga');
+  assert.equal('item_id' in addedLog, false, 'Bentuk log tidak lagi memuat penunjuk item');
   assert.equal(addedLog.date, getTodayString());
 
   const logList = env.getOrCreateElement('log-list');
@@ -624,88 +623,6 @@ test('Tiket 08 - Ubah tanggal entri menjadi bulan lalu ikut mengubah urutan daft
   );
 });
 
-test('Tiket 08 - Hapus Log: friksi ketik "hapus" dan item tertaut tetap ada', async () => {
-  const exampleData = JSON.parse(fs.readFileSync(exampleJsonPath, 'utf8'));
-  const env = createTestEnvironment(exampleData);
-  // detectStorageMode lalu loadData async sejak tiket 11
-  await new Promise(resolve => setImmediate(resolve));
-  await new Promise(resolve => setImmediate(resolve));
-
-  const { switchTab, showDeleteLogConfirmation } = env.sandbox;
-  switchTab('log');
-
-  showDeleteLogConfirmation(exampleData.logs[0]);
-  assert.equal(env.activeModals.length, 1);
-
-  const confirmInput = env.getOrCreateElement('input-confirm-delete-log');
-  const confirmBtn = env.getOrCreateElement('btn-confirm-delete-log');
-  assert.equal(confirmBtn.disabled, true, 'Tombol hapus harus nonaktif sebelum konfirmasi');
-
-  confirmInput.value = 'batal';
-  confirmInput.trigger('input');
-  assert.equal(confirmBtn.disabled, true, 'Kata yang salah tidak boleh mengaktifkan tombol');
-
-  confirmInput.value = 'HAPUS';
-  confirmInput.trigger('input');
-  assert.equal(confirmBtn.disabled, false, 'Kata "hapus" harus mengaktifkan tombol (case-insensitive)');
-
-  confirmBtn.trigger('click');
-  // saveData async sejak tiket 11
-  await new Promise(resolve => setImmediate(resolve));
-  await new Promise(resolve => setImmediate(resolve));
-  assert.equal(env.activeModals.length, 0, 'Modal harus tertutup setelah hapus');
-
-  const savedData = JSON.parse(env.store['indeks_v1']);
-  assert.ok(!savedData.logs.some(entry => entry.id === 'l1'), 'Entri log l1 harus terhapus');
-  assert.ok(
-    savedData.items.some(item => item.id === 'sheet-ta-admin'),
-    'Item tertaut Sheet Admin TA TIDAK boleh terhapus'
-  );
-  assert.ok(
-    savedData.todo.some(todo => todo.item_id === 'sheet-ta-admin'),
-    'Todo lain tidak boleh terpengaruh'
-  );
-});
-
-test('Tiket 08 - Fallback "tanpa tautan" ketika item_id null atau item terhapus', async () => {
-  const exampleData = JSON.parse(fs.readFileSync(exampleJsonPath, 'utf8'));
-  // l2 menunjuk item yang tidak ada (item sudah dihapus), l3 sengaja tanpa tautan
-  exampleData.logs.push({ id: 'l2', date: '2026-09-28', item_id: 'item-yang-dihapus', teks: 'Item sudah dihapus' });
-  exampleData.logs.push({ id: 'l3', date: '2026-09-27', item_id: null, teks: 'Sengaja tanpa tautan' });
-  const env = createTestEnvironment(exampleData);
-  // loadData async saat halaman siap
-  await new Promise(resolve => setImmediate(resolve));
-  await new Promise(resolve => setImmediate(resolve));
-
-  const { switchTab, saveData } = env.sandbox;
-  switchTab('log');
-
-  let logList = env.getOrCreateElement('log-list');
-  assert.match(logList.innerHTML, /tanpa tautan/, 'Entri dengan item_id null harus memuat "tanpa tautan"');
-  assert.match(logList.innerHTML, /Sheet Admin TA/, 'Entri yang masih ber-tautan menampilkan judul item');
-
-  // Simulasikan item tertaut dihapus: entri log tetap ada, item_id menjadi null
-  await saveData({
-    version: 1,
-    items: exampleData.items.filter(item => item.id !== 'sheet-ta-admin'),
-    todo: exampleData.todo.map(todo => (
-      todo.item_id === 'sheet-ta-admin' ? { ...todo, item_id: null } : todo
-    )),
-    logs: exampleData.logs.map(entry => (
-      entry.item_id === 'sheet-ta-admin' ? { ...entry, item_id: null } : entry
-    ))
-  });
-
-  logList = env.getOrCreateElement('log-list');
-  assert.match(logList.innerHTML, /Input 20 data/, 'Entri log harus tetap ada setelah item dihapus');
-  assert.match(logList.innerHTML, /tanpa tautan/, 'Log harus memakai "tanpa tautan" setelah item dihapus');
-  assert.ok(!/Sheet Admin TA/.test(logList.innerHTML), 'Judul item yang sudah terhapus tidak boleh tampil');
-
-  // logs tetap utuh di storage (tidak ikut terhapus)
-  const savedData = JSON.parse(env.store['indeks_v1']);
-  assert.ok(savedData.logs.some(entry => entry.id === 'l1'), 'Entri log l1 tetap tersimpan');
-  assert.equal(savedData.logs.find(entry => entry.id === 'l1').item_id, null);
-});
 
 test('Tiket 08 - Retensi isian form saat penyimpanan gagal (wireframe §5)', async () => {
   const exampleData = JSON.parse(fs.readFileSync(exampleJsonPath, 'utf8'));

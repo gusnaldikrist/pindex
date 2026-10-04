@@ -1596,8 +1596,6 @@ function deadlineHariKe(deadline, todayString) {
     if (!todoListContainer) return;
 
     const allTodos = (state.data && Array.isArray(state.data.todo)) ? state.data.todo : [];
-    const allItems = (state.data && Array.isArray(state.data.items)) ? state.data.items : [];
-    const itemsMap = new Map(allItems.map(item => [item.id, item]));
 
     const filteredTodos = filterTodos(allTodos, state.todoSearchQuery, state.todoFilterStatus);
 
@@ -1615,13 +1613,6 @@ function deadlineHariKe(deadline, todayString) {
       todoListContainer.innerHTML = filteredTodos.map(todo => {
         const status = getTodoStatus(todo);
         const statusBadgeHtml = renderTodoStatusBadge(status);
-        const linkedItem = todo.item_id ? itemsMap.get(todo.item_id) : null;
-        let linkedItemText = '';
-        if (linkedItem) {
-          linkedItemText = escapeHtml(linkedItem.title);
-        } else {
-          linkedItemText = 'tanpa tautan';
-        }
 
         return `
           <div class="todo-item ${todo.done ? 'is-done' : ''}" data-id="${escapeHtml(todo.id)}">
@@ -1629,7 +1620,6 @@ function deadlineHariKe(deadline, todayString) {
               <input type="checkbox" class="todo-checkbox" data-id="${escapeHtml(todo.id)}" ${todo.done ? 'checked' : ''} aria-label="Tandai selesai">
               <span class="todo-text ${todo.done ? 'is-done' : ''}">${escapeHtml(todo.teks)}</span>
               ${statusBadgeHtml}
-              ${linkedItemText ? `<span class="todo-linked-item">${linkedItemText}</span>` : ''}
             </div>
             <div class="todo-item-actions">
               <button type="button" class="btn btn-secondary btn-sm btn-ubah-todo" data-id="${escapeHtml(todo.id)}">Ubah</button>
@@ -1714,14 +1704,6 @@ function deadlineHariKe(deadline, todayString) {
     const isEdit = Boolean(todoToEdit && todoToEdit.id);
     const initialText = isEdit ? (todoToEdit.teks || '') : '';
     const initialDeadline = isEdit ? (todoToEdit.deadline || '') : '';
-    const initialItemId = isEdit ? (todoToEdit.item_id || '') : '';
-
-    const allItems = (state.data && Array.isArray(state.data.items)) ? state.data.items : [];
-
-    const itemOptionsHtml = allItems.map(item => {
-      const isSelected = item.id === initialItemId ? 'selected' : '';
-      return `<option value="${escapeHtml(item.id)}" ${isSelected}>${escapeHtml(item.title)}</option>`;
-    }).join('');
 
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
@@ -1745,16 +1727,6 @@ function deadlineHariKe(deadline, todayString) {
             <input type="date" id="todo-deadline" class="form-input" value="${escapeHtml(initialDeadline)}">
             <div class="form-hint">Format YYYY-MM-DD (opsional)</div>
           </div>
-
-          <div class="form-group">
-            <label class="form-label" for="todo-item-id">Item Tertaut</label>
-            <select id="todo-item-id" class="form-select">
-              <option value="">Tanpa tautan</option>
-              ${itemOptionsHtml}
-            </select>
-            <div class="form-hint">Hubungkan dengan item di Indeks (opsional)</div>
-          </div>
-        </div>
         <div class="modal-footer">
           <div></div>
           <div class="modal-footer-actions">
@@ -1772,7 +1744,6 @@ function deadlineHariKe(deadline, todayString) {
       textArea.value = initialText;
     }
     const deadlineInput = document.getElementById('todo-deadline');
-    const itemSelect = document.getElementById('todo-item-id');
     const saveBtn = document.getElementById('btn-todo-save');
     const closeBtn = document.getElementById('btn-close-todo-modal');
     const cancelBtn = overlay.querySelector('.btn-cancel-todo-modal');
@@ -1816,7 +1787,6 @@ function deadlineHariKe(deadline, todayString) {
 
         const textValue = textArea.value.trim();
         const deadlineValue = deadlineInput && deadlineInput.value ? deadlineInput.value : null;
-        const selectedItemId = itemSelect && itemSelect.value ? itemSelect.value : null;
         const today = getTodayDateString();
 
         const todos = (state.data && Array.isArray(state.data.todo)) ? state.data.todo : [];
@@ -1826,7 +1796,6 @@ function deadlineHariKe(deadline, todayString) {
           if (todoIdx >= 0) {
             todos[todoIdx].teks = textValue;
             todos[todoIdx].deadline = deadlineValue;
-            todos[todoIdx].item_id = selectedItemId;
             todos[todoIdx].updated_at = today;
           }
         } else {
@@ -1834,7 +1803,6 @@ function deadlineHariKe(deadline, todayString) {
           todos.unshift({
             id: newId,
             teks: textValue,
-            item_id: selectedItemId,
             deadline: deadlineValue,
             done: false,
             updated_at: today
@@ -1998,8 +1966,6 @@ async function confirmDestructive(config) {
     if (!logListContainer) return;
 
     const allLogs = (state.data && Array.isArray(state.data.logs)) ? state.data.logs : [];
-    const allItems = (state.data && Array.isArray(state.data.items)) ? state.data.items : [];
-    const itemsMap = new Map(allItems.map(item => [item.id, item]));
 
     const filteredLogs = filterLogs(allLogs, state.logSearchQuery, state.logDateFrom, state.logDateTo);
 
@@ -2017,15 +1983,11 @@ async function confirmDestructive(config) {
     }
 
     logListContainer.innerHTML = filteredLogs.map(logEntry => {
-      const linkedItem = logEntry.item_id ? itemsMap.get(logEntry.item_id) : null;
-      const linkedItemText = linkedItem ? escapeHtml(linkedItem.title) : 'tanpa tautan';
-
       return `
         <div class="log-item" data-id="${escapeHtml(logEntry.id)}">
           <div class="log-item-left">
             <span class="log-date-cell">${escapeHtml(logEntry.date || '')}</span>
             <span class="log-text">${escapeHtml(logEntry.teks)}</span>
-            <span class="log-linked-item">${linkedItemText}</span>
           </div>
           <div class="log-item-actions">
             <button type="button" class="btn btn-secondary btn-sm btn-ubah-log" data-id="${escapeHtml(logEntry.id)}">Ubah</button>
@@ -2104,13 +2066,6 @@ async function confirmDestructive(config) {
     const initialDate = isEdit && DATE_PATTERN.test(String(logToEdit.date || ''))
       ? logToEdit.date
       : getTodayDateString();
-    const initialItemId = isEdit ? (logToEdit.item_id || '') : '';
-
-    const allItems = (state.data && Array.isArray(state.data.items)) ? state.data.items : [];
-    const itemOptionsHtml = allItems.map(item => {
-      const isSelected = item.id === initialItemId ? 'selected' : '';
-      return `<option value="${escapeHtml(item.id)}" ${isSelected}>${escapeHtml(item.title)}</option>`;
-    }).join('');
 
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
@@ -2134,16 +2089,6 @@ async function confirmDestructive(config) {
             <textarea id="log-text" class="form-textarea" maxlength="200" placeholder="Teks logbook (1-200 karakter)">${escapeHtml(initialText)}</textarea>
             <div id="log-text-error" class="form-error" style="display: none;"></div>
           </div>
-
-          <div class="form-group">
-            <label class="form-label" for="log-item-id">Item Tertaut</label>
-            <select id="log-item-id" class="form-select">
-              <option value="">Tanpa tautan</option>
-              ${itemOptionsHtml}
-            </select>
-            <div class="form-hint">Hubungkan dengan item di Indeks (opsional)</div>
-          </div>
-        </div>
         <div class="modal-footer">
           <div></div>
           <div class="modal-footer-actions">
@@ -2158,7 +2103,6 @@ async function confirmDestructive(config) {
 
     const dateInput = document.getElementById('log-date');
     const textArea = document.getElementById('log-text');
-    const itemSelect = document.getElementById('log-item-id');
     const saveBtn = document.getElementById('btn-log-save');
     const closeBtn = document.getElementById('btn-close-log-modal');
     const cancelBtn = overlay.querySelector('.btn-cancel-log-modal');
@@ -2225,7 +2169,6 @@ async function confirmDestructive(config) {
 
         const textValue = textArea.value.trim();
         const dateValue = String(dateInput.value).trim();
-        const selectedItemId = itemSelect && itemSelect.value ? itemSelect.value : null;
 
         const logs = (state.data && Array.isArray(state.data.logs)) ? state.data.logs : [];
 
@@ -2234,13 +2177,11 @@ async function confirmDestructive(config) {
           if (logIdx >= 0) {
             logs[logIdx].date = dateValue;
             logs[logIdx].teks = textValue;
-            logs[logIdx].item_id = selectedItemId;
           }
         } else {
           logs.unshift({
             id: generateLogId(logs),
             date: dateValue,
-            item_id: selectedItemId,
             teks: textValue
           });
         }

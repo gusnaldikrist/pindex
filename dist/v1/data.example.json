@@ -36,9 +36,9 @@
     }
   ],
   "todo": [
-    {"id": "t1", "teks": "Validasi 20 draft - kumpul Jumat", "item_id": "sheet-ta-admin", "deadline": "2026-10-03", "done": false, "updated_at": "2026-09-29"}
+    {"id": "t1", "teks": "Validasi 20 draft - kumpul Jumat", "deadline": "2026-10-03", "done": false, "updated_at": "2026-09-29"}
   ],
   "logs": [
-    {"id": "l1", "date": "2026-09-29", "item_id": "sheet-ta-admin", "teks": "Input 20 data"}
+    {"id": "l1", "date": "2026-09-29", "teks": "Input 20 data"}
   ]
 }
