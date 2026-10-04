@@ -819,3 +819,58 @@ test('Tiket 01 - Tautan tanpa label tetap tersimpan, dan labelnya terisi dari UR
   assert.equal(baru.links[0].label, 'pedoman',
     'Label harus diambil dari bagian terakhir URL');
 });
+
+// Tag yang sudah dipakai disusun dari data, bukan dari daftar terpisah yang
+// bisa basi. Huruf kecil dan unik, karena itulah bentuk yang disimpan.
+test('Tiket 02 - Pengumpul tag unik dan huruf kecil dari data', async () => {
+  const env = createTestEnvironment();
+  await new Promise(resolve => setImmediate(resolve));
+  await new Promise(resolve => setImmediate(resolve));
+  const { kumpulkanTag } = env.sandbox;
+
+  const items = [
+    { id: 'a', tags: ['wisuda', 'ta'] },
+    { id: 'b', tags: ['TA', 'wisuda'] },
+    { id: 'c', tags: ['sheet'] },
+    { id: 'd', tags: [] },
+    { id: 'e' },
+    { id: 'f', tags: ['wisuda', null, '  '] },
+    { id: 'g', tags: 'bukan array' }
+  ];
+
+  // Array dari dalam sandbox punya prototype berbeda, jadi disalin ke
+  // realm pengujian dulu; perbandingan ketat akan gagal tanpa itu.
+  assert.deepEqual(Array.from(kumpulkanTag(items)), ['sheet', 'ta', 'wisuda'],
+    'Tag unik, huruf kecil, tanpa duplikat, dan terurut');
+
+  assert.deepEqual(Array.from(kumpulkanTag([])), [], 'Data kosong menghasilkan daftar kosong');
+  assert.deepEqual(Array.from(kumpulkanTag(null)), [], 'Data yang bukan array dianggap kosong');
+});
+
+test('Tiket 02 - Saran tag memuat setiap tag yang terpakai, tidak memuat yang lain', async () => {
+  const exampleData = JSON.parse(fs.readFileSync(exampleJsonPath, 'utf8'));
+  const env = createTestEnvironment(exampleData);
+  await new Promise(resolve => setImmediate(resolve));
+  await new Promise(resolve => setImmediate(resolve));
+  const { kumpulkanTag } = env.sandbox;
+
+  const saran = kumpulkanTag(exampleData.items);
+
+  // Setiap tag yang benar-benar dipakai data contoh harus muncul
+  const terpakai = new Set();
+  for (const item of exampleData.items) {
+    for (const tag of item.tags || []) terpakai.add(tag);
+  }
+  for (const tag of terpakai) {
+    assert.ok(saran.includes(tag), `Tag yang terpakai "${tag}" harus ada di saran`);
+  }
+
+  // Dan tidak boleh ada yang tidak dipakai
+  const semua = ['pajak', 'inventaris', 'zzz'];
+  for (const tag of semua) {
+    assert.ok(!saran.includes(tag), `Tag yang tidak terpakai "${tag}" tidak boleh muncul`);
+  }
+
+  // Tidak ada duplikat
+  assert.equal(new Set(saran).size, saran.length, 'Saran tidak boleh punya duplikat');
+});

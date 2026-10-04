@@ -362,6 +362,27 @@
     return `${slug}-${counter}`;
   }
 
+  // Tag yang sedang terpakai, disusun dari data setiap kali dibutuhkan:
+  // huruf kecil, unik, terurut. Tidak ada daftar tag yang tersimpan terpisah,
+  // jadi tidak bisa basi dan tidak perlu disegarkan sendiri.
+  //
+  // Satu helper dipakai bersama oleh saran di form item dan oleh bagian lain
+  // yang perlu tahu seluruh tag yang terpakai, supaya keduanya tidak bisa
+  // berbeda pendapat tentang daftar ini.
+  function kumpulkanTag(items) {
+    if (!Array.isArray(items)) return [];
+    const himpun = new Set();
+    for (const item of items) {
+      const tags = item && Array.isArray(item.tags) ? item.tags : [];
+      for (const raw of tags) {
+        if (raw === null || raw === undefined) continue;
+        const tag = String(raw).trim().toLowerCase();
+        if (tag !== '') himpun.add(tag);
+      }
+    }
+    return Array.from(himpun).sort();
+  }
+
   function validateTags(tagsInput) {
     if (typeof tagsInput !== 'string' || tagsInput.trim() === '') {
       return { valid: false, tags: [], error: 'Tag minimal 1 dan tidak boleh kosong' };
@@ -579,7 +600,10 @@
 
           <div class="form-group">
             <label class="form-label" for="item-tags">Tag <span class="req">*</span></label>
-            <input type="text" id="item-tags" class="form-input" placeholder="ta, sheet, admin (dipisah koma)" value="${escapeHtml(initialTags)}">
+            <input type="text" id="item-tags" class="form-input" list="tag-tersedia" placeholder="ta, sheet, admin (dipisah koma)" value="${escapeHtml(initialTags)}">
+            <datalist id="tag-tersedia">
+              ${kumpulkanTag(state.data && state.data.items).map(tag => `<option value="${escapeHtml(tag)}"></option>`).join('')}
+            </datalist>
             <div class="form-hint">Huruf kecil tanpa spasi, dipisah koma</div>
             <div id="item-tags-error" class="form-error" style="display: none;"></div>
           </div>
@@ -2743,6 +2767,7 @@ async function confirmDestructive(config) {
     normalisasiTautan,
     isiTautan,
     validateTags,
+    kumpulkanTag,
     validateSop,
     openItemModal,
     generateTodoId,
