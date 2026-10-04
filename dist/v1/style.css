@@ -447,6 +447,7 @@ body {
   position: relative;
   display: flex;
   align-items: center;
+  height: var(--control-height);
   background-color: var(--card);
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
@@ -1585,6 +1586,7 @@ body {
   position: relative;
   display: flex;
   align-items: center;
+  height: var(--control-height);
   background-color: var(--card);
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
@@ -1602,9 +1604,10 @@ body {
   pointer-events: none;
 }
 
+.search-bar-wrap .search-input,
 .todo-search-box .search-input,
 .log-search-box .search-input {
-  height: 38px;
+  height: 100%;
   padding-left: 36px;
 }
 
@@ -1615,13 +1618,22 @@ body {
   flex-shrink: 0;
 }
 
+/* Semua kendali dalam baris kendali satu tab memakai radius yang sama, bukan
+   cuma kotak cari dan saringan. Tanpa ini tombol tambah terlihat seperti dari
+   komponen lain karena radiusnya 4px, bukan 6px. */
+.search-bar-row .btn,
+.todo-header-row .btn,
+.log-header-row .btn {
+  border-radius: var(--radius-md);
+}
+
 .btn-todo-filter {
   padding: 0 10px;
-  height: 28px;
+  height: var(--control-height);
   font-family: var(--font-family);
   font-size: var(--font-meta);
   font-weight: 500;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   background: var(--card);
   border: 1px solid var(--line);
   color: var(--muted);
@@ -1834,11 +1846,12 @@ body {
 
 .log-date-filter .form-input {
   width: auto;
+  height: var(--control-height);
   padding: 4px 8px;
   font-size: var(--font-meta);
   background-color: var(--card);
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
 }
 
 /* ==========================================================================
