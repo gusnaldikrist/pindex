@@ -394,6 +394,35 @@
     return Array.from(himpun).sort();
   }
 
+  // Saran tautan untuk form todo, disusun dari seluruh tautan yang sudah
+  // dipakai di Indeks. Yang disimpan tetap bentuk tautan biasa, yaitu url dan
+  // label: tidak ada id item yang ikut tersimpan, jadi daftar ini tidak
+  // membuat todo merujuk item mana pun.
+  //
+  // Yang ditampilkan sebagai teks adalah judul item, bukan URL-nya. URL
+  // Google Sheet sepanjang itu mustahil dibaca di daftar tarik-turun, jadi
+  // yang tampil harus sesuatu yang orang kenali.
+  //
+  // Satu helper dipakai bersama oleh form tambah dan form ubah, supaya
+  // keduanya tidak bisa berbeda pendapat tentang daftar ini.
+  function kumpulkanTautan(items) {
+    if (!Array.isArray(items)) return [];
+    const seen = new Set();
+    const hasil = [];
+    for (const item of items) {
+      if (!item) continue;
+      const judul = String(item.title || '').trim();
+      const links = Array.isArray(item.links) ? item.links : [];
+      for (const raw of links) {
+        const hasilNormal = normalisasiTautan(raw && raw.url);
+        if (!hasilNormal.url || seen.has(hasilNormal.url)) continue;
+        seen.add(hasilNormal.url);
+        hasil.push({ url: hasilNormal.url, judul });
+      }
+    }
+    return hasil;
+  }
+
   function validateTags(tagsInput) {
     if (typeof tagsInput !== 'string' || tagsInput.trim() === '') {
       return { valid: false, tags: [], error: 'Tag minimal 1 dan tidak boleh kosong' };
@@ -1776,7 +1805,10 @@ function deadlineHariKe(deadline, todayString) {
 
           <div class="form-group">
             <label class="form-label" for="todo-link">Tautan (opsional)</label>
-            <input type="text" id="todo-link" class="form-input" value="${escapeHtml(initialLink)}" placeholder="https://..., D:/..., mailto:...">
+            <input type="text" id="todo-link" class="form-input" list="tautan-tersedia" value="${escapeHtml(initialLink)}" placeholder="https://..., D:/..., mailto:...">
+            <datalist id="tautan-tersedia">
+              ${kumpulkanTautan(state.data && state.data.items).map(t => `<option value="${escapeHtml(t.url)}">${escapeHtml(t.judul)}</option>`).join('')}
+            </datalist>
             <div class="form-hint">URL web, path lokal Windows, atau mailto: / tel:. Tanpa skema ditambahkan https://</div>
           </div>
         <div class="modal-footer">

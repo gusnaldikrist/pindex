@@ -993,3 +993,79 @@ test('Tautan Opsional - Import menolak links yang salah bentuk', async () => {
     assert.match(hasil.error, /links/);
   }
 });
+
+// ---------------------------------------------------------------------------
+// Saran tautan dari Indeks di form todo
+// ---------------------------------------------------------------------------
+// Saran disusun dari tautan yang sudah dipakai di Indeks, supaya orang tidak
+// harus mengingat URL dari kepala saat menulis todo. Yang disimpan tetap
+// bentuk tautan biasa: url dan label, tanpa id item.
+
+function envDenganIndeks(items) {
+  return envSiap({ version: 2, items, todo: [], logs: [] });
+}
+
+test('Saran tautan - Datalist menampilkan URL dengan judul item sebagai teksnya', async () => {
+  const env = await envDenganIndeks([
+    { id: 'a', title: 'Sheet Admin TA', tags: ['ta'], links: [{ url: 'https://docs.google.com/x1' }] }
+  ]);
+  env.sandbox.switchTab('todo');
+  env.sandbox.openTodoModal(null);
+
+  const html = env.activeModals[0].innerHTML;
+  assert.match(html, /<datalist id="tautan-tersedia">/, 'Form todo harus punya datalist tautan');
+  assert.match(html, /list="tautan-tersedia"/, 'Kolom tautan harus terpasang ke datalist');
+  assert.match(html, /<option value="https:\/\/docs\.google\.com\/x1">Sheet Admin TA<\/option>/,
+    'Yang tampil harus judul item, bukan URL panjang');
+});
+
+test('Saran tautan - Saran hanya daftar URL, tidak menyimpan rujukan item', async () => {
+  const env = await envDenganIndeks([
+    { id: 'a', title: 'Sheet Admin TA', tags: ['ta'], links: [{ url: 'https://docs.google.com/x1' }] }
+  ]);
+  env.sandbox.switchTab('todo');
+  env.sandbox.openTodoModal(null);
+
+  // Memilih dari daftar harus mengisi kolom dengan URL-nya, dan hasil simpan
+  // tidak boleh membawa id item. Inilah yang menjaga aturan isolasi modul:
+  // todo boleh memakai alamat dari Indeks tanpa pernah merujuk itemnya.
+  env.getOrCreateElement('todo-text').value = 'Cek draft';
+  env.getOrCreateElement('todo-link').value = 'https://docs.google.com/x1';
+  env.getOrCreateElement('btn-todo-save').trigger('click');
+  await new Promise(resolve => setImmediate(resolve));
+  await new Promise(resolve => setImmediate(resolve));
+
+  const tersimpan = JSON.parse(env.store['indeks_v1']);
+  const todo = tersimpan.todo.find(t => t.teks === 'Cek draft');
+  assert.deepEqual(todo.links, [{ url: 'https://docs.google.com/x1' }]);
+  assert.equal(JSON.stringify(todo).includes('"id":"a"'), false,
+    'Entri todo tidak boleh menyimpan id item indeks');
+  assert.equal('item_id' in todo, false, 'Penunjuk item tidak boleh kembali lewat pintu ini');
+});
+
+test('Saran tautan - URL yang sama di dua item hanya ditawarkan sekali', async () => {
+  const env = await envDenganIndeks([
+    { id: 'a', title: 'Sheet Admin TA', tags: [], links: [{ url: 'https://docs.google.com/sama' }] },
+    { id: 'b', title: 'SOP Wisuda', tags: [], links: [{ url: 'https://docs.google.com/sama' }] },
+    { id: 'c', title: 'Tanpa Tautan', tags: [] }
+  ]);
+  env.sandbox.switchTab('todo');
+  env.sandbox.openTodoModal(null);
+
+  const html = env.activeModals[0].innerHTML;
+  const kemunculan = (html.match(/https:\/\/docs\.google\.com\/sama/g) || []).length;
+  assert.equal(kemunculan, 1, 'URL yang sama tidak boleh diulang di daftar saran');
+  assert.doesNotMatch(html, /Tanpa Tautan<\/option>/,
+    'Item tanpa tautan tidak boleh menambah apa-apa ke saran');
+});
+
+test('Saran tautan - Indeks kosong tidak merusak form todo', async () => {
+  const env = await envDenganIndeks([]);
+  env.sandbox.switchTab('todo');
+  env.sandbox.openTodoModal(null);
+
+  assert.match(env.activeModals[0].innerHTML, /<datalist id="tautan-tersedia">/,
+    'Datalist tetap ada walau kosong, supaya kolom tautan tidak berubah bentuk');
+  assert.equal(env.getOrCreateElement('btn-todo-save').disabled, true,
+    'Tombol simpan tetap mengikuti aturan teks, bukan daftar saran');
+});
