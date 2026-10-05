@@ -1,44 +1,97 @@
 {
-  "version": 1,
+  "version": 2,
   "items": [
     {
       "id": "slims-bulian",
       "title": "SLiMS Bulian",
-      "tags": ["slims", "bulian", "sirkulasi", "harian"],
-      "links": [{"label": "Buka SLiMS", "url": "http://localhost:8089/bulian"}],
+      "tags": [
+        "slims",
+        "bulian",
+        "sirkulasi",
+        "harian"
+      ],
+      "links": [
+        {
+          "label": "Buka SLiMS",
+          "url": "http://localhost:8089/bulian"
+        }
+      ],
       "catatan": "Buka untuk cek sirkulasi harian",
       "updated_at": "2026-09-29"
     },
     {
       "id": "repo-uniga",
       "title": "Repository UNIGA",
-      "tags": ["repository", "ta", "skripsi", "upload", "wisuda"],
-      "links": [{"label": "Buka Repository", "url": "https://lib.fkominfo.uniga.ac.id/login"}],
+      "tags": [
+        "repository",
+        "ta",
+        "skripsi",
+        "upload",
+        "wisuda"
+      ],
+      "links": [
+        {
+          "label": "Buka Repository",
+          "url": "https://lib.fkominfo.uniga.ac.id/login"
+        }
+      ],
       "catatan": "Minta mahasiswa upload mandiri sebelum validasi",
       "updated_at": "2026-09-29"
     },
     {
       "id": "sheet-job-training",
       "title": "Sheet Job Training",
-      "tags": ["sheet", "magang", "pkl", "nilai"],
-      "links": [{"label": "Buka Sheet", "url": "https://docs.google.com/spreadsheets/d/1jmf0xjn34JZTS7P69XZ_XC5kHsCWx7DAvJB_mqZ9RVQ/edit"}],
+      "tags": [
+        "sheet",
+        "magang",
+        "pkl",
+        "nilai"
+      ],
+      "links": [
+        {
+          "label": "Buka Sheet",
+          "url": "https://docs.google.com/spreadsheets/d/1jmf0xjn34JZTS7P69XZ_XC5kHsCWx7DAvJB_mqZ9RVQ/edit"
+        }
+      ],
       "catatan": "Terima laporan PKL lalu catat nilai di sheet ini",
       "updated_at": "2026-09-29"
     },
     {
       "id": "sheet-ta-admin",
       "title": "Sheet Admin TA",
-      "tags": ["ta", "skripsi", "sheet", "admin", "wisuda", "harian"],
-      "links": [{"label": "Buka Sheet", "url": "https://docs.google.com/spreadsheets/d/1lW_j8FhRSZ3bNnxYoG7x5jFhsy2PTA1PCFiIvqLUzFE/edit"}],
+      "tags": [
+        "ta",
+        "skripsi",
+        "sheet",
+        "admin",
+        "wisuda",
+        "harian"
+      ],
+      "links": [
+        {
+          "label": "Buka Sheet",
+          "url": "https://docs.google.com/spreadsheets/d/1lW_j8FhRSZ3bNnxYoG7x5jFhsy2PTA1PCFiIvqLUzFE/edit"
+        }
+      ],
       "catatan": "Terima draft TA lalu catat di sheet admin ini",
       "sop": "Cek form pengajuan\nCatat di sheet ini\nKirim ke kepala bagian",
       "updated_at": "2026-09-29"
     }
   ],
   "todo": [
-    {"id": "t1", "teks": "Validasi 20 draft - kumpul Jumat", "deadline": "2026-10-03", "done": false, "updated_at": "2026-09-29"}
+    {
+      "id": "t1",
+      "teks": "Validasi 20 draft - kumpul Jumat",
+      "deadline": "2026-10-03",
+      "done": false,
+      "updated_at": "2026-09-29"
+    }
   ],
   "logs": [
-    {"id": "l1", "date": "2026-09-29", "teks": "Input 20 data"}
+    {
+      "id": "l1",
+      "date": "2026-09-29",
+      "teks": "Input 20 data"
+    }
   ]
 }

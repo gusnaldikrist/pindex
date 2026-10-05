@@ -195,14 +195,27 @@ test('Permintaan menggantung dibatasi waktu, bukan menggantung selamanya', async
 
 test('Tiket 11 - Constanta versi adapter sama dengan yang dipakai app.js', () => {
   const appSource = fs.readFileSync(appJsPath, 'utf8');
-  const match = appSource.match(/const SUPPORTED_VERSION\s*=\s*(\d+)/);
-  assert.ok(match, 'app.js harus mendeklarasikan SUPPORTED_VERSION');
+  const match = appSource.match(/const supportedVersion\s*=\s*(\d+)/);
+  assert.ok(match, 'app.js harus mendeklarasikan supportedVersion');
+
+  // Frontend menerima lebih dari satu versi: field baru pada todo opsional,
+  // jadi berkas lama tidak perlu dimigrasi. Backend harus punya daftar yang
+  // sama, kalau tidak satu sisi akan menolak berkas yang diterima sisi lain.
+  const diterima = appSource.match(/const VERSI_DITERIMA\s*=\s*\[([^\]]*)\]/);
+  assert.ok(diterima, 'app.js harus mendeklarasikan VERSI_DITERIMA');
+  const versiFrontend = diterima[1].split(',').map((v) => Number(v.trim())).filter((v) => !Number.isNaN(v));
+  assert.deepEqual(versiFrontend, [1, Number(match[1])], 'Frontend menerima versi lama dan versi terbaru');
 
   const goSource = fs.readFileSync(path.join(repoRoot, 'src', 'pro', 'main.go'), 'utf8');
   const goMatch = goSource.match(/supportedVersion\s*=\s*(\d+)/);
   assert.ok(goMatch, 'main.go harus mendeklarasikan supportedVersion');
 
   assert.equal(match[1], goMatch[1], 'Frontend dan backend harus memakai angka versi yang sama');
+
+  const goDaftar = goSource.match(/func versiDiterima\(\)\s*\[\]float64\s*\{\s*return\s*\[\]float64\{([^}]*)\}/);
+  assert.ok(goDaftar, 'main.go harus mendeklarasikan versiDiterima');
+  const versiBackend = goDaftar[1].split(',').map((v) => Number(v.trim())).filter((v) => !Number.isNaN(v));
+  assert.deepEqual(versiBackend, versiFrontend, 'Frontend dan backend harus menerima versi yang sama');
 });
 
 test('adapter tidak lagi mengekspor jalur penyimpanan', () => {

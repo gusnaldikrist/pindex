@@ -314,6 +314,7 @@ function createTestEnvironment(initialData = null) {
     todoList,
     activeModals,
     store,
+    backend,
     triggerDoc: domDocument.trigger
   };
 }
@@ -774,4 +775,221 @@ test('Tiket 01 - Urutan tetap benar saat disaring dan saat dicari', async () => 
   const cari = filterTodos(testTodos, 'Opsi', 'semua');
   assert.deepEqual(cari.map(t => t.id), ['a-lewat', 'a-nanti', 'selesai'],
     'Pencarian tidak boleh mengacak urutan');
+});
+
+// ---------------------------------------------------------------------------
+// Tautan Opsional pada TodoList
+// ---------------------------------------------------------------------------
+// Tautan todo menunjuk ke luar indeks: URL web sementara, path lokal
+// Windows, mailto:/tel:, atau alamat lain. Field-nya opsional, jadi todo
+// tanpa tautan harus berperilaku persis seperti sebelumnya (kriteria 1).
+
+function dataDenganTodo(todo) {
+  return { version: 2, items: [], todo, logs: [] };
+}
+
+async function envSiap(data) {
+  const env = createTestEnvironment(data);
+  await new Promise(resolve => setImmediate(resolve));
+  await new Promise(resolve => setImmediate(resolve));
+  return env;
+}
+
+test('Tautan Opsional - Todo tanpa tautan tidak punya tombol Buka', async () => {
+  const env = await envSiap(dataDenganTodo([
+    { id: 't1', teks: 'Tanpa tautan', deadline: null, done: false, updated_at: '2026-10-01' }
+  ]));
+  env.sandbox.switchTab('todo');
+
+  const html = env.getOrCreateElement('todo-list').innerHTML;
+  assert.match(html, /Tanpa tautan/);
+  assert.doesNotMatch(html, /btn-buka-todo/,
+    'Todo tanpa links tidak boleh mendapat tombol Buka (kriteria 1)');
+});
+
+test('Tautan Opsional - Tautan web jadi anchor, bukan tombol backend', async () => {
+  const env = await envSiap(dataDenganTodo([
+    { id: 't1', teks: 'Form ad-hoc', deadline: null, done: false, updated_at: '2026-10-01',
+      links: [{ url: 'https://docs.google.com/forms/d/abc' }] }
+  ]));
+  env.sandbox.switchTab('todo');
+
+  const html = env.getOrCreateElement('todo-list').innerHTML;
+  assert.match(html, /btn-buka-todo/, 'Todo bertautan harus punya tombol Buka (kriteria 2)');
+  assert.match(html, /href="https:\/\/docs\.google\.com\/forms\/d\/abc"/,
+    'URL web harus jadi href yang membuka tab baru');
+  assert.match(html, /target="_blank"/);
+  assert.doesNotMatch(html, /<button[^>]*btn-buka-todo/,
+    'URL web tidak boleh jadi tombol, karena peramban bisa membukanya sendiri');
+  assert.deepEqual(env.backend.getPermintaanOpen(), [],
+    'URL web tidak boleh dikirim ke backend');
+});
+
+test('Tautan Opsional - mailto dan tel diteruskan apa adanya', async () => {
+  const env = await envSiap(dataDenganTodo([
+    { id: 't1', teks: 'Telepon', deadline: null, done: false, updated_at: '2026-10-01',
+      links: [{ url: 'tel:+6281234567890' }] },
+    { id: 't2', teks: 'Surat', deadline: null, done: false, updated_at: '2026-10-01',
+      links: [{ url: 'mailto:ketua@perpustakaan.test' }] }
+  ]));
+  env.sandbox.switchTab('todo');
+
+  const html = env.getOrCreateElement('todo-list').innerHTML;
+  assert.match(html, /href="tel:\+6281234567890"/,
+    'Skema tel: harus diteruskan apa adanya, tanpa awalan (kriteria 4)');
+  assert.match(html, /href="mailto:ketua@perpustakaan\.test"/,
+    'Skema mailto: harus diteruskan apa adanya, tanpa awalan (kriteria 4)');
+  assert.deepEqual(env.backend.getPermintaanOpen(), [],
+    'Skema non-web tidak boleh dikirim ke backend');
+});
+
+test('Tautan Opsional - Path lokal dikirim ke backend lewat POST /open', async () => {
+  const env = await envSiap(dataDenganTodo([
+    { id: 't1', teks: 'Berkas di jaringan', deadline: null, done: false, updated_at: '2026-10-01',
+      links: [{ url: 'D:\\Berkas\\Sidang' }] }
+  ]));
+  env.sandbox.switchTab('todo');
+
+  const todoList = env.getOrCreateElement('todo-list');
+  const html = todoList.innerHTML;
+  assert.match(html, /<button[^>]*btn-buka-todo/, 'Path lokal harus jadi tombol, bukan anchor (kriteria 3)');
+  assert.doesNotMatch(html, /href="D:/, 'Path lokal tidak boleh jadi href');
+
+  todoList.trigger('click', {
+    target: {
+      closest: (sel) => {
+        if (sel === '.btn-buka-todo') {
+          return { getAttribute: (attr) => (attr === 'data-id' ? 't1' : 'D:\\Berkas\\Sidang') };
+        }
+        return null;
+      }
+    }
+  });
+  await new Promise(resolve => setImmediate(resolve));
+
+  assert.deepEqual(env.backend.getPermintaanOpen(), ['D:\\Berkas\\Sidang'],
+    'Path lokal harus diteruskan ke backend apa adanya (kriteria 3)');
+});
+
+test('Tautan Opsional - URL tanpa skema dapat awalan https://', async () => {
+  const env = await envSiap(dataDenganTodo([
+    { id: 't1', teks: 'Tanpa skema', deadline: null, done: false, updated_at: '2026-10-01',
+      links: [{ url: 'docs.google.com/x' }] }
+  ]));
+  env.sandbox.switchTab('todo');
+
+  assert.match(env.getOrCreateElement('todo-list').innerHTML, /href="https:\/\/docs\.google\.com\/x"/,
+    'URL tanpa skema harus dapat awalan https://');
+});
+
+test('Tautan Opsional - Modal menyimpan tautan web', async () => {
+  const env = await envSiap(dataDenganTodo([]));
+  env.sandbox.switchTab('todo');
+  env.sandbox.openTodoModal(null);
+
+  env.getOrCreateElement('todo-text').value = 'Kirim form';
+  env.getOrCreateElement('todo-link').value = 'https://forms.example.test/x';
+  env.getOrCreateElement('btn-todo-save').trigger('click');
+  await new Promise(resolve => setImmediate(resolve));
+  await new Promise(resolve => setImmediate(resolve));
+
+  const tersimpan = JSON.parse(env.store['indeks_v1']);
+  const todo = tersimpan.todo.find(t => t.teks === 'Kirim form');
+  assert.ok(todo, 'Todo baru harus tersimpan');
+  assert.deepEqual(todo.links, [{ url: 'https://forms.example.test/x' }], 'Tautan harus tersimpan (kriteria 5)');
+});
+
+test('Tautan Opsional - Modal memuat tautan yang sudah ada saat diubah', async () => {
+  const env = await envSiap(dataDenganTodo([
+    { id: 't1', teks: 'Ada tautan', deadline: null, done: false, updated_at: '2026-10-01',
+      links: [{ url: 'https://forms.example.test/ada' }] }
+  ]));
+  env.sandbox.switchTab('todo');
+
+  const [todoLama] = JSON.parse(env.store['indeks_v1']).todo;
+  env.sandbox.openTodoModal(todoLama);
+
+  assert.equal(env.getOrCreateElement('todo-link').value, 'https://forms.example.test/ada',
+    'Tautan lama harus muncul di form (kriteria 5)');
+});
+
+test('Tautan Opsional - Mengosongkan kolom tautan menghapus field links', async () => {
+  const env = await envSiap(dataDenganTodo([
+    { id: 't1', teks: 'Ada tautan', deadline: null, done: false, updated_at: '2026-10-01',
+      links: [{ url: 'https://forms.example.test/ada' }] }
+  ]));
+  env.sandbox.switchTab('todo');
+
+  const [todoLama] = JSON.parse(env.store['indeks_v1']).todo;
+  env.sandbox.openTodoModal(todoLama);
+  env.getOrCreateElement('todo-link').value = '';
+  env.getOrCreateElement('btn-todo-save').trigger('click');
+  await new Promise(resolve => setImmediate(resolve));
+  await new Promise(resolve => setImmediate(resolve));
+
+  const tersimpan = JSON.parse(env.store['indeks_v1']);
+  assert.equal('links' in tersimpan.todo[0], false,
+    'Field links harus hilang, bukan jadi array kosong');
+});
+
+test('Tautan Opsional - Tautan tidak memengaruhi saringan dan pengurutan', async () => {
+  const { filterTodos } = (await envSiap(dataDenganTodo([]))).sandbox;
+
+  const denganTautan = [
+    { id: 'a', teks: 'Opsi lapar', done: false, deadline: '2020-01-01', updated_at: '2020-01-01',
+      links: [{ url: 'https://a.test' }] },
+    { id: 'b', teks: 'Opsi master', done: false, deadline: '2099-01-01', updated_at: '2026-01-01' }
+  ];
+
+  assert.deepEqual(filterTodos(denganTautan, '', 'belum').map(t => t.id), ['a', 'b'],
+    'Urutan deadline tidak boleh berubah karena ada tautan');
+  assert.deepEqual(filterTodos(denganTautan, 'opsi', 'semua').map(t => t.id), ['a', 'b'],
+    'Pencarian teks tidak boleh ikut mencari di tautan');
+  assert.equal(filterTodos(denganTautan, 'a.test', 'semua').length, 0,
+    'URL tautan tidak boleh jadi sumber pencarian');
+});
+
+test('Tautan Opsional - Berkas versi 1 tanpa field links tetap terbaca', async () => {
+  const env = await envSiap({
+    version: 1, items: [], logs: [],
+    todo: [{ id: 't1', teks: 'Dari berkas lama', deadline: null, done: false, updated_at: '2026-09-29' }]
+  });
+  env.sandbox.switchTab('todo');
+
+  assert.match(env.getOrCreateElement('todo-list').innerHTML, /Dari berkas lama/,
+    'data.json versi 1 harus tetap terbaca tanpa error (kriteria 7)');
+
+  // Disimpan lagi tidak boleh menaikkan versi tanpa alasan: field baru
+  // opsional, jadi tidak ada yang perlu dimigrasi. Centang dipakai untuk
+  // memicu simpan tanpa modal.
+  env.getOrCreateElement('todo-list').trigger('click', {
+    target: {
+      closest: (sel) => (sel === '.todo-checkbox' ? { getAttribute: () => 't1' } : null)
+    }
+  });
+  await new Promise(resolve => setImmediate(resolve));
+
+  assert.equal(JSON.parse(env.store['indeks_v1']).version, 1,
+    'Versi berkas lama harus dipakai apa adanya');
+});
+
+test('Tautan Opsional - Import menolak links yang salah bentuk', async () => {
+  const { validateImportedData } = (await envSiap(dataDenganTodo([]))).sandbox;
+
+  const sah = { version: 2, items: [], logs: [], todo: [{ links: [{ url: 'https://a.test' }] }] };
+  assert.equal(validateImportedData(sah).valid, true, 'links yang benar harus diterima');
+
+  const tanpaLinks = { version: 2, items: [], logs: [], todo: [{ teks: 'Tanpa tautan' }] };
+  assert.equal(validateImportedData(tanpaLinks).valid, true, 'Todo tanpa links tetap sah');
+
+  const salah = [
+    { links: 'bukan array' },
+    { links: [{ label: 'tanpa url' }] },
+    { links: [{ url: '' }] }
+  ];
+  for (const todo of salah) {
+    const hasil = validateImportedData({ version: 2, items: [], logs: [], todo: [todo] });
+    assert.equal(hasil.valid, false, `harus ditolak: ${JSON.stringify(todo.links)}`);
+    assert.match(hasil.error, /links/);
+  }
 });

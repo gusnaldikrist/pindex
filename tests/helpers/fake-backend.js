@@ -27,6 +27,7 @@ function kosong() {
 export function buatBackendPalsu(store, opsi = {}) {
   const KUNCI = 'indeks_v1';
   const simpanan = [];
+  const permintaanOpen = [];
   let jumlahRequest = 0;
 
   if (!store[KUNCI]) store[KUNCI] = JSON.stringify(kosong());
@@ -46,6 +47,8 @@ export function buatBackendPalsu(store, opsi = {}) {
       }
 
       if (url === '/open') {
+        const parsed = JSON.parse(options.body || '{}');
+        permintaanOpen.push(parsed.path);
         return { ok: true, status: 200, text: async () => '' };
       }
 
@@ -57,6 +60,9 @@ export function buatBackendPalsu(store, opsi = {}) {
 
     /** Semua badan yang pernah dikirim lewat POST /api/data. */
     getSimpanan: () => simpanan.slice(),
+
+    /** Semua path yang pernah dikirim lewat POST /open. */
+    getPermintaanOpen: () => permintaanOpen.slice(),
 
     /** Berapa kali fetch dipanggil. */
     getJumlahRequest: () => jumlahRequest,

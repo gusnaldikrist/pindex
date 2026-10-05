@@ -212,7 +212,7 @@ test('penyimpanan lewat POST /api/data, bukan localStorage', async () => {
   const postCalls = calls.filter(c => c.method === 'POST');
   assert.equal(postCalls.length, 1, 'Harus satu permintaan POST ke backend');
   assert.equal(postCalls[0].url, '/api/data');
-  assert.match(postCalls[0].body, /"version":1/, 'Badan POST berisi seluruh isi berkas');
+  assert.match(postCalls[0].body, new RegExp(`"version":${exampleData.version}`), 'Badan POST berisi seluruh isi berkas');
   assert.match(env.getStatusText(), /Penanda - 4 item - tersimpan \d{2}:\d{2}/,
     'Status menampilkan jam simpan');
 });

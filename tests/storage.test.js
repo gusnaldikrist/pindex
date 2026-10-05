@@ -86,11 +86,16 @@ function createStorageEnvironment(options = {}) {
   };
 }
 
-test('data.example.json: validasi format dan skema V1', () => {
+test('data.example.json: validasi format dan skema yang sedang dipakai', () => {
   assert.ok(fs.existsSync(exampleJsonPath), 'data.example.json harus ada');
   const parsed = JSON.parse(fs.readFileSync(exampleJsonPath, 'utf8'));
 
-  assert.equal(parsed.version, 1, 'Version harus 1');
+  // Berkas contoh ikut naik ke versi skema yang sedang dipakai, supaya
+  // orang yang mulai dari Import tidak mengunci berkasnya di versi lama.
+  const appSource = fs.readFileSync(appJsPath, 'utf8');
+  const versi = appSource.match(/const supportedVersion\s*=\s*(\d+)/);
+  assert.ok(versi, 'app.js harus mendeklarasikan supportedVersion');
+  assert.equal(parsed.version, Number(versi[1]), 'Versi data contoh harus sama dengan versi yang ditulis app.js');
   assert.ok(Array.isArray(parsed.items), 'items harus berupa array');
   assert.equal(parsed.items.length, 4, 'Harus ada 4 data dummy items');
   assert.ok(Array.isArray(parsed.todo), 'todo harus berupa array');

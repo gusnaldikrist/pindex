@@ -129,12 +129,12 @@ const tagRegex = /<([a-zA-Z0-9]+)([^>]*\bid="([^"]+)"[^>]*)>([\s\S]*?)<\/\1>|<([
       },
       trigger: (evt, evtData = {}) => {
         if (listeners[evt]) {
-          listeners[evt].forEach(h => h({ target: el, preventDefault: () => {}, ...evtData }));
+          listeners[evt].forEach(h => { h({ target: el, preventDefault: () => {}, ...evtData }); });
         }
       },
       click: () => {
         if (listeners['click']) {
-          listeners['click'].forEach(h => h({ target: el, preventDefault: () => {} }));
+          listeners['click'].forEach(h => { h({ target: el, preventDefault: () => {} }); });
         }
       },
       focus: () => {},
@@ -213,7 +213,7 @@ const tagRegex = /<([a-zA-Z0-9]+)([^>]*\bid="([^"]+)"[^>]*)>([\s\S]*?)<\/\1>|<([
     },
     removeEventListener: () => {},
     trigger: (evt, data) => {
-      if (docListeners[evt]) docListeners[evt].forEach(h => h(data));
+      if (docListeners[evt]) docListeners[evt].forEach(h => { h(data); });
     }
   };
 
@@ -227,7 +227,7 @@ const tagRegex = /<([a-zA-Z0-9]+)([^>]*\bid="([^"]+)"[^>]*)>([\s\S]*?)<\/\1>|<([
       getItem: (k) => store[k] || null,
       setItem: (k, v) => { store[k] = String(v); },
       removeItem: (k) => { delete store[k]; },
-      clear: () => { Object.keys(store).forEach(k => delete store[k]); }
+      clear: () => { Object.keys(store).forEach(k => { delete store[k]; }); }
     },
     navigator: { clipboard: { writeText: async () => Promise.resolve() } },
     Blob: class FakeBlob {
@@ -314,7 +314,7 @@ test('Tiket 09 - Export: nama berkas memuat tanggal hari ini dan isi berkas utuh
   assert.equal(link.download, `indeks-data-${stamp}.json`, 'Nama berkas harus indeks-data-YYYYMMDD.json');
 
   const exported = await readDownloadJson(link);
-  assert.equal(exported.version, 1, 'Penanda version harus ikut');
+  assert.equal(exported.version, exampleData.version, 'Penanda version harus ikut apa adanya');
   assert.equal(exported.items.length, 4, 'Ekspor 4 item');
   assert.equal(exported.todo.length, 1, 'Ekspor 1 todo');
   assert.equal(exported.logs.length, 1, 'Ekspor 1 log');
@@ -358,7 +358,7 @@ test('Tiket 09 - Export lalu Import: data pulih utuh (simulasi profil browser la
   assert.equal(restored.logs.length, 1, '1 log pulih');
   assert.ok(!('pinned_tags' in restored), 'Field yang dibuang tidak ikut pulih');
   assert.equal(restored.items[0].title, 'SLiMS Bulian', 'Isi item tidak berubah');
-  assert.equal(restored.version, 1, 'Version ikut terpulih');
+  assert.equal(restored.version, exampleData.version, 'Version ikut terpulih');
 });
 
 test('Tiket 09 - Import berkas tidak sah: items bukan array ditolak dan data lama utuh', async () => {
