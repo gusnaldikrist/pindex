@@ -1754,6 +1754,22 @@ body {
   border-color: var(--line-strong);
 }
 
+/* Tautan opsional pada todo memakai ikon aksi yang sama seperti di tabel
+   Indeks, supaya bentuknya tidak terasa seperti fitur baru. Berbeda dengan
+   ikon tabel, ikon di sini selalu terlihat: baris todo tidak punya keadaan
+   hover yang bisa jadi pemicunya, dan tautannya harus tetap ditemukan
+   tanpa harus lewat kursor. */
+.todo-item .btn-buka-todo {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+.todo-item .btn-buka-todo:hover {
+  background-color: var(--band-2);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
 .badge-status {
   font-family: var(--font-family-mono);
   font-size: var(--font-meta-sm);

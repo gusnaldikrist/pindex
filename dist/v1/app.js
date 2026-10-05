@@ -25,12 +25,20 @@
   // diam-diam terpecah di dua tempat: satu di browser, satu di data.json.
   const NO_SERVER_MESSAGE = 'Aplikasi ini berjalan lewat penanda.exe. Tutup halaman ini, lalu jalankan penanda.exe.';
 
+  // Versi skema yang dikenali. supportedVersion adalah versi yang ditulis
+  // untuk data baru, VERSI_DITERIMA adalah semua versi yang boleh dibaca.
+  //
+  // Field links pada entri todo dibuat opsional, jadi data versi 1 tetap
+  // terbaca tanpa migrasi apa pun. Nilainya harus sama dengan
+  // supportedVersion di src/pro/main.go supaya berkas hasil Export dan hasil
+  // POST backend saling serasi (spec kontrak 5).
+  const supportedVersion = 2;
+  const VERSI_DITERIMA = [1, 2];
+
   function createEmptyData() {
     return {
-      version: 1,
-      items: [],
-      todo: [],
-      logs: []
+      version: supportedVersion,
+      items: [], todo: [], logs: []
     };
   }
 
@@ -39,7 +47,10 @@
       return createEmptyData();
     }
     return {
-      version: raw.version || 1,
+      // Berkas versi 1 tetap dipakai apa adanya. Field baru opsional, jadi
+      // tidak ada yang perlu diubah, dan menaikkan nomor saat load hanya
+      // membuat diff yang tidak menjelaskan apa pun.
+      version: VERSI_DITERIMA.includes(raw.version) ? raw.version : supportedVersion,
       items: Array.isArray(raw.items) ? raw.items : [],
       todo: Array.isArray(raw.todo) ? raw.todo : [],
       logs: Array.isArray(raw.logs) ? raw.logs : []
@@ -1613,6 +1624,7 @@ function deadlineHariKe(deadline, todayString) {
       todoListContainer.innerHTML = filteredTodos.map(todo => {
         const status = getTodoStatus(todo);
         const statusBadgeHtml = renderTodoStatusBadge(status);
+        const tautanHtml = renderTodoLink(todo);
 
         return `
           <div class="todo-item ${todo.done ? 'is-done' : ''}" data-id="${escapeHtml(todo.id)}">
@@ -1620,6 +1632,7 @@ function deadlineHariKe(deadline, todayString) {
               <input type="checkbox" class="todo-checkbox" data-id="${escapeHtml(todo.id)}" ${todo.done ? 'checked' : ''} aria-label="Tandai selesai">
               <span class="todo-text ${todo.done ? 'is-done' : ''}">${escapeHtml(todo.teks)}</span>
               ${statusBadgeHtml}
+              ${tautanHtml}
             </div>
             <div class="todo-item-actions">
               <button type="button" class="btn btn-secondary btn-sm btn-ubah-todo" data-id="${escapeHtml(todo.id)}">Ubah</button>
@@ -1634,15 +1647,25 @@ function deadlineHariKe(deadline, todayString) {
       todoListContainer.dataset.boundClick = 'true';
       todoListContainer.addEventListener('click', async (e) => {
         const checkbox = e.target.closest('.todo-checkbox');
+        const bukaTautanBtn = e.target.closest('.btn-buka-todo');
         const ubahBtn = e.target.closest('.btn-ubah-todo');
         const hapusBtn = e.target.closest('.btn-hapus-todo');
-        const actionEl = checkbox || ubahBtn || hapusBtn;
+        const actionEl = checkbox || bukaTautanBtn || ubahBtn || hapusBtn;
         if (!actionEl) return;
 
         const id = actionEl.getAttribute('data-id');
         const currentTodos = (state.data && Array.isArray(state.data.todo)) ? state.data.todo : [];
         const targetTodo = currentTodos.find(candidate => candidate.id === id);
         if (!targetTodo) return;
+
+        // Path lokal tidak bisa dibuka peramban, jadi backend yang
+        // menjalankan perintah pembuka. Tombol web sudah berupa tautan
+        // anchor, jadi tidak pernah sampai ke sini.
+        if (bukaTautanBtn) {
+          const url = bukaTautanBtn.getAttribute('data-url');
+          if (url) openLocalPathViaBackend(url);
+          return;
+        }
 
         if (checkbox) {
           targetTodo.done = !targetTodo.done;
@@ -1662,6 +1685,24 @@ function deadlineHariKe(deadline, todayString) {
         }
       });
     }
+  }
+
+  // Tautan opsional pada entri todo. Hanya satu tautan yang ditampilkan,
+  // jadi form cukup satu input; fieldnya tetap array supaya bentuk data
+  // tidak berubah kalau nanti butuh lebih dari satu.
+  //
+  // Web dan skema lain (mailto:, tel:) jadi anchor biasa: peramban yang
+  // menanganinya, dan itu justru satu-satunya cara mailto: bisa membuka
+  // aplikasi email. Path lokal tidak bisa dibuka peramban, jadi jadi tombol
+  // yang meneruskan ke backend.
+  function renderTodoLink(todo) {
+    const info = getPrimaryLinkInfo(todo);
+    if (!info.url) return '';
+    const title = escapeHtml('Buka ' + (info.label || 'tautan'));
+    if (info.isLocal) {
+      return `<button type="button" class="btn-aksi btn-buka-todo" data-id="${escapeHtml(todo.id)}" data-url="${escapeHtml(info.url)}" title="${title}" aria-label="${title}">${getSvgIcon('buka', 12)}</button>`;
+    }
+    return `<a class="btn-aksi btn-buka-todo" data-id="${escapeHtml(todo.id)}" href="${escapeHtml(info.url)}" target="_blank" rel="noopener noreferrer" title="${title}" aria-label="${title}">${getSvgIcon('buka', 12)}</a>`;
   }
 
   function initTodoListeners() {
@@ -1704,6 +1745,11 @@ function deadlineHariKe(deadline, todayString) {
     const isEdit = Boolean(todoToEdit && todoToEdit.id);
     const initialText = isEdit ? (todoToEdit.teks || '') : '';
     const initialDeadline = isEdit ? (todoToEdit.deadline || '') : '';
+    // Satu tautan saja di form, walau fieldnya array. Isian diambil lewat
+    // normalisasiTautan supaya yang tampil sama persis dengan yang disimpan.
+    const initialLink = isEdit
+      ? normalisasiTautan(getPrimaryLinkInfo(todoToEdit).url).url
+      : '';
 
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
@@ -1727,6 +1773,12 @@ function deadlineHariKe(deadline, todayString) {
             <input type="date" id="todo-deadline" class="form-input" value="${escapeHtml(initialDeadline)}">
             <div class="form-hint">Format YYYY-MM-DD (opsional)</div>
           </div>
+
+          <div class="form-group">
+            <label class="form-label" for="todo-link">Tautan (opsional)</label>
+            <input type="text" id="todo-link" class="form-input" value="${escapeHtml(initialLink)}" placeholder="https://..., D:/..., mailto:...">
+            <div class="form-hint">URL web, path lokal Windows, atau mailto: / tel:. Tanpa skema ditambahkan https://</div>
+          </div>
         <div class="modal-footer">
           <div></div>
           <div class="modal-footer-actions">
@@ -1744,6 +1796,13 @@ function deadlineHariKe(deadline, todayString) {
       textArea.value = initialText;
     }
     const deadlineInput = document.getElementById('todo-deadline');
+    if (deadlineInput && initialDeadline) {
+      deadlineInput.value = initialDeadline;
+    }
+    const linkInput = document.getElementById('todo-link');
+    if (linkInput && initialLink) {
+      linkInput.value = initialLink;
+    }
     const saveBtn = document.getElementById('btn-todo-save');
     const closeBtn = document.getElementById('btn-close-todo-modal');
     const cancelBtn = overlay.querySelector('.btn-cancel-todo-modal');
@@ -1789,6 +1848,12 @@ function deadlineHariKe(deadline, todayString) {
         const deadlineValue = deadlineInput && deadlineInput.value ? deadlineInput.value : null;
         const today = getTodayDateString();
 
+        // Tautan kosong berarti todo tanpa tautan: field-nya dihapus, bukan
+        // disimpan sebagai array kosong, supaya berkas tetap ringkas dan
+        // todo yang tadinya tidak punya tautan tidak bertambah property baru.
+        const linkValue = linkInput ? normalisasiTautan(linkInput.value).url : '';
+        const linksValue = linkValue === '' ? undefined : [{ url: linkValue }];
+
         const todos = (state.data && Array.isArray(state.data.todo)) ? state.data.todo : [];
 
         if (isEdit) {
@@ -1797,16 +1862,23 @@ function deadlineHariKe(deadline, todayString) {
             todos[todoIdx].teks = textValue;
             todos[todoIdx].deadline = deadlineValue;
             todos[todoIdx].updated_at = today;
+            if (linksValue) {
+              todos[todoIdx].links = linksValue;
+            } else {
+              delete todos[todoIdx].links;
+            }
           }
         } else {
           const newId = generateTodoId(todos);
-          todos.unshift({
+          const baru = {
             id: newId,
             teks: textValue,
             deadline: deadlineValue,
             done: false,
             updated_at: today
-          });
+          };
+          if (linksValue) baru.links = linksValue;
+          todos.unshift(baru);
         }
 
         state.data.todo = todos;
@@ -2220,10 +2292,8 @@ async function confirmDestructive(config) {
      Modul Export dan Import JSON (Tiket 09)
      ========================================================================== */
 
-  // Versi skema yang dikenali di V1 (prd-skema.md bagian pembuka). Nilainya
-  // harus sama dengan supportedVersion di src/pro/main.go supaya berkas hasil
-  // Export dan hasil POST backend saling serasi (spec kontrak 5).
-  const SUPPORTED_VERSION = 1;
+  // Versi skema dan aturan pembacanya dideklarasikan di atas
+  // (createEmptyData), karena dipakai juga saat halaman mulai membaca berkas.
 
   // Tanggal hari ini dalam bentuk YYYYMMDD untuk nama berkas unduhan
   function getTodayCompactString() {
@@ -2274,10 +2344,10 @@ async function confirmDestructive(config) {
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       return { valid: false, error: 'Berkas ditolak: isinya bukan objek data Penanda' };
     }
-    if (parsed.version !== SUPPORTED_VERSION) {
+    if (!VERSI_DITERIMA.includes(parsed.version)) {
       return {
         valid: false,
-        error: `Berkas ditolak: version ${JSON.stringify(parsed.version)} tidak dikenal; hanya version ${SUPPORTED_VERSION} yang dipakai`
+        error: `Berkas ditolak: version ${JSON.stringify(parsed.version)} tidak dikenal; yang dipakai hanya ${VERSI_DITERIMA.map(v => 'version ' + v).join(' dan ')}`
       };
     }
     const requiredArrays = ['items', 'todo', 'logs'];
@@ -2286,7 +2356,29 @@ async function confirmDestructive(config) {
         return { valid: false, error: `Berkas ditolak: "${fieldName}" harus berupa array` };
       }
     }
+    for (let i = 0; i < parsed.todo.length; i++) {
+      const problem = validateTodoLinks(parsed.todo[i].links);
+      if (problem) {
+        return { valid: false, error: `Berkas ditolak: field links pada todo indeks ${i}: ${problem}` };
+      }
+    }
     return { valid: true, data: parsed, error: '' };
+  }
+
+  // validateTodoLinks memeriksa field links opsional pada satu entri todo.
+  // Mengembalikan kalimat bila salah, atau '' bila sah. Aturan yang sama
+  // dijalankan validTodoLinks di backend, jadi keduanya menolak berkas yang
+  // sama.
+  function validateTodoLinks(value) {
+    if (value === null || value === undefined) return '';
+    if (!Array.isArray(value)) return 'harus berupa array';
+    for (let i = 0; i < value.length; i++) {
+      const link = value[i];
+      if (!link || typeof link !== 'object' || Array.isArray(link)) return `elemen indeks ${i} bukan objek`;
+      if (typeof link.url !== 'string') return `elemen indeks ${i} tidak punya url berupa teks`;
+      if (link.url.trim() === '') return `url pada elemen indeks ${i} kosong`;
+    }
+    return '';
   }
 
   function showImportRejectedModal(errorMessage) {
