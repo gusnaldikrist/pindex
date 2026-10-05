@@ -424,28 +424,26 @@
     return hasil;
   }
 
+  // Tag masuk sebagai daftar yang sudah dipisah, bukan sebagai teks berkoma:
+  // pemisahnya adalah Enter, jadi spasi di dalam sebuah tag tidak lagi ambigu.
+  //
+  // Yang masih ditolak: huruf besar, tag kosong, dan tag yang sama ditulis dua
+  // kali. Spasi di dalam tag itu sah, karena sekarang tidak ada koma yang
+  // berfungsi sebagai pemisah.
   function validateTags(tagsInput) {
-    if (typeof tagsInput !== 'string' || tagsInput.trim() === '') {
-      return { valid: false, tags: [], error: 'Tag minimal 1 dan tidak boleh kosong' };
-    }
-
-    const rawTokens = tagsInput.split(',');
+    const daftar = Array.isArray(tagsInput) ? tagsInput : [];
     const parsedTags = [];
 
-    for (const token of rawTokens) {
-      const trimmed = token.trim();
+    for (const mentah of daftar) {
+      const trimmed = String(mentah === null || mentah === undefined ? '' : mentah).trim();
       if (!trimmed) continue;
 
-      if (/[A-Z]/.test(token)) {
-        return { valid: false, tags: [], error: `Tag tidak boleh memuat huruf besar ("${trimmed}"). Gunakan huruf kecil tanpa spasi.` };
-      }
-
-      if (token.endsWith(' ') || /\s/.test(trimmed)) {
-        return { valid: false, tags: [], error: `Tag tidak boleh memuat spasi ("${trimmed}"). Gunakan huruf kecil tanpa spasi.` };
-      }
-
-      if (!/^[a-z0-9-]+$/.test(trimmed)) {
-        return { valid: false, tags: [], error: `Tag hanya boleh memuat huruf kecil, angka, dan tanda hubung ("${trimmed}").` };
+      if (/[A-Z]/.test(trimmed)) {
+        return {
+          valid: false,
+          tags: [],
+          error: 'Tag tidak boleh memuat huruf besar ("' + trimmed + '"). Gunakan huruf kecil.'
+        };
       }
 
       if (!parsedTags.includes(trimmed)) {
@@ -599,7 +597,7 @@
 
     const isEdit = Boolean(itemToEdit && itemToEdit.id);
     const initialTitle = isEdit ? (itemToEdit.title || '') : '';
-    const initialTags = isEdit && Array.isArray(itemToEdit.tags) ? itemToEdit.tags.join(', ') : '';
+    const initialTags = isEdit && Array.isArray(itemToEdit.tags) ? itemToEdit.tags.slice() : [];
     const initialCatatan = isEdit ? (itemToEdit.catatan || '') : '';
     const initialSop = isEdit && typeof itemToEdit.sop === 'string' ? itemToEdit.sop : '';
     let links = isEdit && Array.isArray(itemToEdit.links) && itemToEdit.links.length > 0
@@ -627,7 +625,11 @@
 
           <div class="form-group">
             <label class="form-label" for="item-tags">Tag <span class="req">*</span></label>
-            <input type="text" id="item-tags" class="form-input" list="tag-tersedia" placeholder="ta, sheet, admin (dipisah koma)" value="${escapeHtml(initialTags)}">
+            <div class="tag-susun" id="tag-susun">
+              <div class="tag-chip-list" id="tag-chip-list"></div>
+              <input type="text" id="item-tags" class="tag-ketik" list="tag-tersedia" placeholder="Ketik tag lalu Enter" autocomplete="off" aria-describedby="tag-petunjuk">
+            </div>
+            <div class="form-hint" id="tag-petunjuk">Enter atau koma untuk memisahkan tag. Tag boleh berisi spasi. Tempel daftar berkoma langsung jadi beberapa tag.</div>
             <datalist id="tag-tersedia">
               ${kumpulkanTag(state.data && state.data.items).map(tag => `<option value="${escapeHtml(tag)}"></option>`).join('')}
             </datalist>
@@ -671,6 +673,98 @@
 
     const titleInput = document.getElementById('item-title');
     const tagsInput = document.getElementById('item-tags');
+    const tagChips = document.getElementById('tag-chip-list');
+    const tagSusun = document.getElementById('tag-susun');
+
+    // Daftar tag yang sedang bekerja, terpisah dari isi kolom ketik. Kolom
+    // ketik hanya memegang satu tag yang sedang diketik; Enter memindahkannya ke
+    // daftar.
+    let daftarTag = initialTags.filter(t => String(t).trim() !== '');
+
+    function gambarTag() {
+      if (!tagChips) return;
+      // Tag sudah lewat escapeHtml, dan data-index hanya berisi nomor urut.
+      // ast-grep-ignore: no-inner-html-js
+      tagChips.innerHTML = daftarTag
+        .map((tag, i) => '<span class="tag-chip">' + escapeHtml(tag) +
+          '<button type="button" class="tag-chip-hapus" data-index="' + i + '" ' +
+          'aria-label="Hapus tag ' + escapeHtml(tag) + '">&times;</button></span>')
+        .join('');
+    }
+
+    function tambahTag(mentah) {
+      const tag = String(mentah === null || mentah === undefined ? '' : mentah).trim();
+      if (tag === '' || daftarTag.includes(tag)) return;
+      daftarTag.push(tag);
+    }
+
+    // Pemisah tag. Koma tetap dipisahkan supaya orang yang terbiasa dengan
+    // cara lama tidak mendadak gagal; Enter adalah cara yang diumumkan.
+    // Baris baru ikut jadi pemisah.
+    // Satu batas untuk tag: koma, titik koma, atau baris baru. Ditulis lewat
+    // fromCharCode supaya berkas ini tidak bisa rusak kalau ada yang mengubah
+    // akhir barisnya.
+    const PEMISAH = new RegExp('[,;' + String.fromCharCode(10) + ']');
+    function tutupTag() {
+      tambahTag(tagsInput.value);
+      tagsInput.value = '';
+      gambarTag();
+      validateForm();
+    }
+
+    gambarTag();
+
+    if (tagsInput) {
+      tagsInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || PEMISAH.test(e.key)) {
+          e.preventDefault();
+          tutupTag();
+          return;
+        }
+        // Backspace di kolom kosong menghapus tag terakhir, seperti di mana saja
+        // kolom berchip bekerja.
+        if (e.key === 'Backspace' && tagsInput.value === '' && daftarTag.length > 0) {
+          e.preventDefault();
+          daftarTag.pop();
+          gambarTag();
+          validateForm();
+        }
+      });
+
+      // Tempel daftar berkoma langsung jadi beberapa tag, bukan satu tag utuh.
+      tagsInput.addEventListener('paste', (e) => {
+        const teks = e.clipboardData && e.clipboardData.getData
+          ? e.clipboardData.getData('text')
+          : '';
+        if (!PEMISAH.test(teks)) return;
+        e.preventDefault();
+        for (const bagian of teks.split(PEMISAH)) tambahTag(bagian);
+        gambarTag();
+        validateForm();
+      });
+    }
+
+    if (tagChips) {
+      tagChips.addEventListener('click', (e) => {
+        const tombol = e.target.closest('.tag-chip-hapus');
+        if (!tombol) return;
+        const index = Number(tombol.getAttribute('data-index'));
+        if (!Number.isNaN(index)) daftarTag.splice(index, 1);
+        gambarTag();
+        if (tagsInput) tagsInput.focus();
+        validateForm();
+      });
+    }
+
+    // Mengklik area kosong pada komponen tag memusatkan fokus ke kolom
+    // ketik, supaya tidak perlu klik tepat pada kotak kecilnya.
+    if (tagSusun) {
+      tagSusun.addEventListener('click', (e) => {
+        if (e.target !== tagSusun && e.target !== tagChips) return;
+        if (tagsInput) tagsInput.focus();
+      });
+    }
+
     const catatanInput = document.getElementById('item-catatan');
     const saveBtn = document.getElementById('btn-item-save');
     const linkRowsContainer = document.getElementById('modal-link-rows');
@@ -735,8 +829,17 @@
 
     function validateForm() {
       const titleValue = titleInput ? titleInput.value.trim() : '';
-      const tagsValue = tagsInput ? tagsInput.value : '';
-      const tagValidationResult = validateTags(tagsValue);
+      // Teks tag yang masih di kolom ketik ikut dihitung, walau belum ditekan
+      // Enter. Tanpa ini orang yang mengetik tag lalu langsung menekan Simpan
+      // akan kehilangan tag itu dan tombol Simpan tetap mati.
+      const tagPending = tagsInput ? tagsInput.value.trim() : '';
+      const tagBelumTutup = tagPending === ''
+        ? []
+        : tagPending.split(PEMISAH).map(t => t.trim()).filter(t => t !== '');
+      const tagUntukDicek = daftarTag.concat(
+        tagBelumTutup.filter(t => !daftarTag.includes(t))
+      );
+      const tagValidationResult = validateTags(tagUntukDicek);
       const formLinks = getFormLinks();
 
       let linksValid = formLinks.length > 0;
@@ -777,7 +880,7 @@
 
       const tagsErrEl = document.getElementById('item-tags-error');
       if (tagsErrEl) {
-        if (!tagValidationResult.valid && tagsValue.trim() !== '') {
+        if (!tagValidationResult.valid && (daftarTag.length > 0 || tagPending !== '')) {
           tagsErrEl.textContent = tagValidationResult.error;
           tagsErrEl.style.display = 'block';
         } else {
@@ -841,7 +944,17 @@
         if (!validateForm()) return;
 
         const title = titleInput.value.trim();
-        const tagValidationResult = validateTags(tagsInput.value);
+        // Tag yang masih di kolom ketik ditutup lebih dulu. Tanpa ini orang yang
+        // mengetik tag lalu langsung menekan Simpan akan kehilangan tag itu,
+        // padahal tombolnya sudah menyala karena validateForm ikut menghitungnya.
+        const pending = tagsInput ? tagsInput.value.trim() : '';
+        if (pending !== '') {
+          for (const bagian of pending.split(PEMISAH)) tambahTag(bagian);
+          gambarTag();
+          tagsInput.value = '';
+        }
+
+        const tagValidationResult = validateTags(daftarTag);
         const cleanCatatan = catatanInput ? catatanInput.value.trim() : '';
         const sopInput = document.getElementById('item-sop');
         const rawSop = sopInput ? String(sopInput.value || '') : '';

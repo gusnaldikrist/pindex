@@ -345,24 +345,119 @@ test('Tiket 06 - Validasi Tag: menolak tag huruf besar atau berspasi dengan pesa
   const { validateTags } = env.sandbox;
   assert.equal(typeof validateTags, 'function', 'validateTags harus didefinisikan');
 
-  // Valid
-  const resValid = validateTags('ta, wisuda, magang');
-  assert.equal(resValid.valid, true, 'Tag huruf kecil tanpa spasi harus valid');
+  // Valid. Inputnya sudah berupa daftar tag, karena pemisahnya Enter, bukan
+  // koma di dalam satu teks.
+  const resValid = validateTags(['ta', 'wisuda', 'magang']);
+  assert.equal(resValid.valid, true, 'Tag huruf kecil harus valid');
   assert.deepEqual(Array.from(resValid.tags), ['ta', 'wisuda', 'magang']);
 
-  // Invalid: huruf besar "TA "
-  const resUppercase = validateTags('TA, wisuda');
+  // Spasi di dalam tag kini sah: pemisahnya Enter, jadi spasi tidak ambigu lagi.
+  const resSpasi = validateTags(['ta', 'sheet admin']);
+  assert.equal(resSpasi.valid, true, 'Tag berspasi harus valid sekarang');
+  assert.deepEqual(Array.from(resSpasi.tags), ['ta', 'sheet admin']);
+
+  // Tag yang sama dua kali disimpan satu kali.
+  const resGanda = validateTags(['ta', 'wisuda', 'ta']);
+  assert.deepEqual(Array.from(resGanda.tags), ['ta', 'wisuda'],
+    'Tag yang sama dua kali harus disimpan satu kali');
+
+  // Spasi di awal dan akhir tag dipangkas, bukan ditolak.
+  const resSpasiUjung = validateTags(['  ta  ']);
+  assert.deepEqual(Array.from(resSpasiUjung.tags), ['ta'],
+    'Spasi di awal dan akhir tag harus dipangkas');
+
+  // Invalid: huruf besar
+  const resUppercase = validateTags(['TA', 'wisuda']);
   assert.equal(resUppercase.valid, false, 'Tag dengan huruf besar harus tidak valid');
   assert.match(resUppercase.error, /huruf besar/i, 'Pesan error harus menyebut huruf besar');
 
-  // Invalid: spasi di dalam tag "sheet admin" atau spasi ujung
-  const resSpace = validateTags('ta, sheet admin');
-  assert.equal(resSpace.valid, false, 'Tag berspasi harus tidak valid');
-  assert.match(resSpace.error, /spasi/i, 'Pesan error harus menyebut spasi');
-
   // Invalid: kosong
-  const resEmpty = validateTags('');
+  const resEmpty = validateTags([]);
   assert.equal(resEmpty.valid, false, 'Tag kosong harus tidak valid');
+  assert.match(resEmpty.error, /minimal 1/i, 'Pesan error harus menyebut minimal satu tag');
+
+  // Input yang bukan daftar ditolak dengan tenang, bukan melempar galat.
+  assert.equal(validateTags('').valid, false, 'String kosong harus tidak valid');
+  assert.equal(validateTags(null).valid, false, 'Null harus tidak valid');
+});
+
+// Enter adalah pemisah tag. Perilaku ini tidak bisa diuji lewat validateTags
+// saja: tanpa test yang benar-benar menekan Enter, muteksinya bisa dihapus dan
+// semua pengujian lain tetap lulus.
+test('Tag chip - Enter menutup tag yang diketik jadi chip', async () => {
+  const exampleData = JSON.parse(fs.readFileSync(exampleJsonPath, 'utf8'));
+  const env = createTestEnvironment(exampleData);
+  await new Promise(resolve => setImmediate(resolve));
+  await new Promise(resolve => setImmediate(resolve));
+
+  const tagsInput = env.getOrCreateElement('item-tags');
+  const chipList = env.getOrCreateElement('tag-chip-list');
+  env.getOrCreateElement('tag-susun');
+  env.sandbox.openItemModal(null);
+
+  tagsInput.value = 'pedoman';
+  tagsInput.trigger('keydown', { key: 'Enter' });
+
+  assert.equal(tagsInput.value, '', 'Kolom ketik harus kosong setelah Enter');
+  assert.match(chipList.innerHTML, /pedoman/, 'Tag harus muncul sebagai chip');
+
+  // Tag kedua, dengan spasi di dalamnya, harus tetap utuh.
+  tagsInput.value = 'sheet admin';
+  tagsInput.trigger('keydown', { key: 'Enter' });
+
+  assert.match(chipList.innerHTML, /sheet admin/,
+    'Tag yang berisi spasi harus tetap utuh setelah ditutup');
+});
+
+test('Tag chip - Backspace di kolom kosong menghapus tag terakhir', async () => {
+  const exampleData = JSON.parse(fs.readFileSync(exampleJsonPath, 'utf8'));
+  const env = createTestEnvironment(exampleData);
+  await new Promise(resolve => setImmediate(resolve));
+  await new Promise(resolve => setImmediate(resolve));
+
+  const tagsInput = env.getOrCreateElement('item-tags');
+  const chipList = env.getOrCreateElement('tag-chip-list');
+  env.getOrCreateElement('tag-susun');
+  env.sandbox.openItemModal(null);
+
+  tagsInput.value = 'pertama';
+  tagsInput.trigger('keydown', { key: 'Enter' });
+  tagsInput.value = 'kedua';
+  tagsInput.trigger('keydown', { key: 'Enter' });
+
+  assert.match(chipList.innerHTML, /kedua/);
+
+  tagsInput.trigger('keydown', { key: 'Backspace' });
+  assert.doesNotMatch(chipList.innerHTML, /kedua/,
+    'Backspace di kolom kosong harus menghapus tag terakhir');
+
+  // Backspace saat masih ada teks di kolom tidak boleh menghapus tag.
+  tagsInput.value = 'belum';
+  tagsInput.trigger('keydown', { key: 'Backspace' });
+  assert.match(chipList.innerHTML, /pertama/,
+    'Backspace saat kolom berisi teks tidak boleh menghapus tag');
+});
+
+test('Tag chip - Enter dan koma keduanya menutup tag', async () => {
+  const exampleData = JSON.parse(fs.readFileSync(exampleJsonPath, 'utf8'));
+  const env = createTestEnvironment(exampleData);
+  await new Promise(resolve => setImmediate(resolve));
+  await new Promise(resolve => setImmediate(resolve));
+
+  const tagsInput = env.getOrCreateElement('item-tags');
+  const chipList = env.getOrCreateElement('tag-chip-list');
+  env.getOrCreateElement('tag-susun');
+  env.sandbox.openItemModal(null);
+
+  // Koma tetap dipisah supaya orang yang terbiasa dengan cara lama tidak
+  // mendadak gagal. Enter adalah cara yang diumumkan.
+  tagsInput.value = 'satu';
+  tagsInput.trigger('keydown', { key: ',' });
+  tagsInput.value = 'dua';
+  tagsInput.trigger('keydown', { key: 'Enter' });
+
+  assert.match(chipList.innerHTML, /satu/);
+  assert.match(chipList.innerHTML, /dua/);
 });
 
 test('Tiket 06 - Alur Tambah item: mengisi form, simpan, tersimpan di localStorage dengan updated_at hari ini', async () => {

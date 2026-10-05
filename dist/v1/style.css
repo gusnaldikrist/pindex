@@ -1407,6 +1407,79 @@ body {
   margin-left: 2px;
 }
 
+.tag-susun {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background-color: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.tag-susun:focus-within {
+  border-color: var(--line-strong);
+}
+
+.tag-chip-list {
+  display: contents;
+}
+
+/* Tag yang sudah ditutup. Bentuknya memakai token yang sama dengan tag di
+   tabel Indeks supaya keduanya terbaca sebagai hal yang sama. */
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 8px;
+  font-family: var(--font-family-mono);
+  font-size: var(--font-meta-sm);
+  color: var(--muted);
+  background-color: var(--band);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.tag-chip-hapus {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--faint);
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.tag-chip-hapus:hover {
+  color: var(--ink);
+  background-color: var(--band-2);
+}
+
+.tag-ketik {
+  flex: 1 1 120px;
+  min-width: 120px;
+  padding: 2px 0;
+  font-family: var(--font-family);
+  font-size: var(--font-body);
+  color: var(--ink);
+  background: none;
+  border: none;
+  caret-color: var(--action);
+}
+
+.tag-ketik:focus {
+  outline: none;
+}
+
 .form-input,
 .form-textarea {
   width: 100%;
