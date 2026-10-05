@@ -293,6 +293,7 @@ const tagRegex = /<([a-zA-Z0-9]+)([^>]*\bid="([^"]+)"[^>]*)>([\s\S]*?)<\/\1>|<([
     pickFile,
     activeModals,
     store,
+    backend,
     triggerDoc: domDocument.trigger
   };
 }
@@ -835,4 +836,331 @@ test('Tiket 09 - Penolakan import memberi petunjuk yang bisa ditindaklanjuti', a
     'Modal penolakan harus menawarkan jalan mendapatkan berkas contoh');
   assert.match(isi, /tidak berubah/i,
     'Modal penolakan harus menyebut data yang sudah ada tidak berubah');
+});
+
+// ---------------------------------------------------------------------------
+// Bantu unduh berkas
+// ---------------------------------------------------------------------------
+// Ekspor JSON dan ekspor CSV akan keduanya memakai satu jalur unduhan. Sebelum
+// helper ini ada, tiap ekspor menyalin ulang cara memicu unduhan, dan
+// penjelasannya soal penundaan revoke ikut hilang saat disalin. Pengujian ini
+// menjaga supaya tidak terjadi lagi.
+
+test('Ekspor - hanya ada satu tempat yang membuat dan melepas objek unduhan', () => {
+  const source = fs.readFileSync(appJsPath, 'utf8');
+  const FILE_BUAT = /URL\.createObjectURL/g;
+  const FILE_LEPAS = /URL\.revokeObjectURL/g;
+
+  const jumlahBuat = (source.match(FILE_BUAT) || []).length;
+  const jumlahLepas = (source.match(FILE_LEPAS) || []).length;
+
+  assert.equal(jumlahBuat, 1,
+    'URL.createObjectURL harus muncul tepat sekali. Munculnya di beberapa tempat berarti ada yang menyalin jalur unduhan.');
+  assert.equal(jumlahLepas, 1,
+    'URL.revokeObjectURL harus muncul tepat sekali, di tempat yang sama.');
+});
+
+test('Ekspor - alasan penundaan pelepasan objek unduhan ikut tersimpan', () => {
+  const source = fs.readFileSync(appJsPath, 'utf8');
+
+  // Alasan ini hilang pertama kali ketika jalur unduhan disalin. Kalau hilang,
+  // cepat atau lambat ada yang memanggil revokeObjectURL tepat setelah click dan
+  // membatalkan unduhan di sebagian browser.
+  const menyertaiRevoke = /Ditunda satu gilir[\s\S]{0,320}?revokeObjectURL/.test(source);
+  assert.ok(menyertaiRevoke,
+    'Komentar alasan penundaan harus dekat dengan pemanggilan revokeObjectURL');
+});
+
+test('Ekspor - unduhan berkas statis milik server tidak memakai jalur Blob', () => {
+  const source = fs.readFileSync(appJsPath, 'utf8');
+  const awalUnduhContoh = source.indexOf('function unduhContohData');
+  const akhirUnduhContoh = source.indexOf('}', awalUnduhContoh);
+
+  assert.ok(awalUnduhContoh !== -1, 'unduhContohData harus ada');
+  const badan = source.slice(awalUnduhContoh, akhirUnduhContoh);
+
+  // Berkas contoh sudah punya alamat sendiri dari server. Membacanya lewat Blob
+  // akan menambah request yang tidak perlu, dan aplikasi tidak boleh menambah
+  // request sia-sia.
+  assert.doesNotMatch(badan, /Blob|createObjectURL/,
+    'unduhContohData harus tetap memakai alamat berkas langsung');
+  assert.match(badan, /data\.example\.json/,
+    'unduhContohData harus tetap menunjuk berkas contoh secara langsung');
+});
+
+// ---------------------------------------------------------------------------
+// Ekspor Logbook ke CSV
+// ---------------------------------------------------------------------------
+// Dua aturan di sini mencegah berkas rusak yang tidak terlihat sampai orang
+// membukanya di Excel: BOM di depan berkas, dan penjaga formula per sel.
+
+const BOM = '\uFEFF';
+
+// Harness ini tidak punya helper tunggu; yang dipakai di berkas ini adalah dua
+// gilir antrean. Fungsi ini membungkusnya supaya tiap pengujian ekspor
+// memakai pola yang sama.
+async function siap() {
+  await new Promise(resolve => setImmediate(resolve));
+  await new Promise(resolve => setImmediate(resolve));
+}
+
+function logData(entries) {
+  return {
+    version: 2,
+    items: [],
+    todo: [],
+    logs: entries
+  };
+}
+
+test('Ekspor Logbook - berkas diawali BOM dan memakai pemisah baris CRLF', async () => {
+  const env = createTestEnvironment(logData([
+    { id: 'l1', date: '2026-09-29', teks: 'Input 20 data' }
+  ]));
+  await siap();
+
+  const csv = env.sandbox.logbookKeCsv([
+    { date: '2026-09-29', teks: 'Input 20 data' }
+  ]);
+
+  assert.ok(csv.startsWith(BOM),
+    'Berkas harus diawali BOM, tanpa itu Excel menebak encoding dan merusak teks non-ASCII');
+  assert.match(csv, /\r\n/,
+    'Pemisah baris harus CRLF');
+  assert.doesNotMatch(csv.replace(/\r\n/g, ''), /\n/,
+    'Tidak boleh ada LF sendirian di luar pasangan CRLF');
+  assert.match(csv, /tanggal,catatan,tautan/,
+    'Baris pertama harus kepala kolom');
+});
+
+test('Ekspor Logbook - sel yang diawali penghitung tidak dievaluasi sebagai formula', async () => {
+  const env = createTestEnvironment(logData([]));
+  await siap();
+  const { selCsv } = env.sandbox;
+
+  for (const awal of ['=', '+', '-', '@']) {
+    const sel = selCsv(awal + 'SUM(A1)');
+    assert.ok(sel.startsWith("'"),
+      `Sel yang diawali ${awal} harus diberi awalan kutip tunggal, dapat: ${sel}`);
+    assert.match(sel, new RegExp(awal.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&')),
+      'Isi aslinya harus tetap ada setelah awalan ditambahkan');
+  }
+
+  // Sel yang tidak diawali penghitung tidak boleh mendapat awalan.
+  for (const biasa of ['Input data', '2026-09-29', 'a=b', '']) {
+    assert.doesNotMatch(selCsv(biasa), /^'/,
+      `Sel biasa tidak boleh mendapat awalan kutip: ${biasa}`);
+  }
+});
+
+test('Ekspor Logbook - koma, kutip, dan baris baru tidak merusak kolom', async () => {
+  const env = createTestEnvironment(logData([]));
+  await siap();
+  const { selCsv } = env.sandbox;
+
+  assert.equal(selCsv('a, b'), '"a, b"', 'Koma harus membuat sel diapit kutip');
+  assert.equal(selCsv('dia bilang "halo"'), '"dia bilang ""halo"""',
+    'Kutip di dalam sel harus digandakan');
+  assert.equal(selCsv('baris satu\nbaris dua'), '"baris satu\nbaris dua"',
+    'Baris baru di dalam sel harus diapit kutip');
+
+  const tanpa = selCsv('biasa saja');
+  assert.equal(tanpa, 'biasa saja', 'Sel biasa tidak boleh diapit kutip');
+});
+
+test('Ekspor Logbook - tautan ikut diekspor dalam satu kolom', async () => {
+  const env = createTestEnvironment(logData([]));
+  await siap();
+
+  const csv = env.sandbox.logbookKeCsv([
+    { date: '2026-09-29', teks: 'Ada tautan', links: [
+      { url: 'https://a.test' }, { url: 'https://b.test' }
+    ] },
+    { date: '2026-09-30', teks: 'Tanpa tautan' }
+  ]);
+
+  assert.match(csv, /https:\/\/a\.test https:\/\/b\.test/,
+    'Dua tautan harus masuk satu sel, dipisah spasi');
+  assert.equal((csv.match(/2026-09-30/g) || []).length, 1,
+    'Entri tanpa tautan tetap punya baris, kolom tautannya kosong');
+});
+
+test('Ekspor Logbook - mengunduh lewat tombol Ekspor CSV', async () => {
+  const env = createTestEnvironment(logData([
+    { id: 'l1', date: '2026-09-29', teks: 'Input 20 data' }
+  ]));
+  await siap();
+
+  const sebelum = JSON.stringify(JSON.parse(env.store['indeks_v1']));
+
+  const tombol = env.getOrCreateElement('btn-ekspor-log-csv');
+  assert.ok(tombol, 'Tombol Ekspor CSV harus ada di baris kendali Logbook');
+
+  env.sandbox.switchTab('log');
+  env.getOrCreateElement('btn-ekspor-log-csv').trigger('click');
+
+  assert.equal(env.downloads.length, 1, 'Klik tombol harus menghasilkan satu unduhan');
+  const unduhan = env.downloads[0];
+  assert.match(unduhan.download, /^logbook-\d{8}\.csv$/,
+    'Nama berkas harus memuat penanda waktu hari ini');
+
+  const isi = await unduhan.blob.text();
+  assert.ok(isi.startsWith(BOM), 'Isi berkas yang diunduh harus diawali BOM');
+  assert.match(isi, /2026-09-29/, 'Berkas harus memuat tanggal entri');
+  assert.match(isi, /Input 20 data/, 'Berkas harus memuat teks entri');
+
+  assert.equal(JSON.stringify(JSON.parse(env.store['indeks_v1'])), sebelum,
+    'Mengekspor tidak boleh mengubah data.json');
+});
+
+test('Ekspor Logbook - CSV tidak membuat request ke luar', async () => {
+  const env = createTestEnvironment(logData([
+    { id: 'l1', date: '2026-09-29', teks: 'Input 20 data' }
+  ]));
+  await siap();
+
+  const sebelum = env.backend.getJumlahRequest();
+  env.sandbox.switchTab('log');
+  env.getOrCreateElement('btn-ekspor-log-csv').trigger('click');
+  await siap(env);
+
+  assert.equal(env.backend.getJumlahRequest(), sebelum,
+    'Ekspor tidak boleh menambah request ke backend');
+});
+
+test('Ekspor Logbook - tombolnya ada di markup halaman', () => {
+  const html = fs.readFileSync(indexHtmlPath, 'utf8');
+  assert.match(html, /id="btn-ekspor-log-csv"/,
+    'Tombol Ekspor CSV harus ada di markup, bukan dibuat lewat JavaScript');
+  assert.match(html, /id="btn-ekspor-log-csv"[\s\S]{0,200}?id="btn-catat-log"/,
+    'Tombol Ekspor CSV harus berada di baris kendali yang sama dengan tombol Catat');
+});
+
+// ---------------------------------------------------------------------------
+// Ekspor Logbook mengikuti saringan yang aktif
+// ---------------------------------------------------------------------------
+// Aturannya satu kalimat: yang diekspor adalah yang tampak. Pengujian di bawah
+// membandingkan isi berkas dengan isi daftar yang benar-benar dirender, bukan
+// hanya menghitung entri, supaya urutan ikut terjaga.
+
+function logDenganRentang() {
+  return [
+    { id: 'l1', date: '2026-09-25', teks: 'Rekap kas awal September' },
+    { id: 'l2', date: '2026-09-28', teks: 'Input 20 data' },
+    { id: 'l3', date: '2026-10-02', teks: 'Rekonsiliasi kas akhir' }
+  ];
+}
+
+async function ekspor(env) {
+  env.downloads.length = 0;
+  env.sandbox.switchTab('log');
+  env.getOrCreateElement('btn-ekspor-log-csv').trigger('click');
+  await siap();
+  assert.equal(env.downloads.length, 1, 'Klik tombol harus menghasilkan satu unduhan');
+  return env.downloads[0].blob.text();
+}
+
+function tanggalDiBerkas(isiCsv) {
+  const baris = isiCsv.replace(/^\uFEFF/, '').split('\r\n').slice(1);
+  return baris.filter(Boolean).map(b => b.split(',')[0]);
+}
+
+test('Ekspor Logbook - rentang terisi hanya mengekspor entri di dalam rentang', async () => {
+  const env = createTestEnvironment(logData(logDenganRentang()));
+  await siap(env);
+
+  env.state.logDateFrom = '2026-09-26';
+  env.state.logDateTo = '2026-09-30';
+  const isi = await ekspor(env);
+
+  assert.deepEqual(tanggalDiBerkas(isi), ['2026-09-28'],
+    'Hanya entri di dalam rentang yang boleh keluar');
+});
+
+test('Ekspor Logbook - rentang kosong mengekspor seluruh entri', async () => {
+  const env = createTestEnvironment(logData(logDenganRentang()));
+  await siap(env);
+
+  env.state.logDateFrom = '';
+  env.state.logDateTo = '';
+  const isi = await ekspor(env);
+
+  assert.deepEqual(tanggalDiBerkas(isi), ['2026-10-02', '2026-09-28', '2026-09-25'],
+    'Kosong berarti seluruh entri, urutan tanggal menurun');
+});
+
+test('Ekspor Logbook - isi berkas sama persis dengan yang tampil, urutan termasuk', async () => {
+  const env = createTestEnvironment(logData(logDenganRentang()));
+  await siap(env);
+
+  env.state.logSearchQuery = 'kas';
+  env.sandbox.switchTab('log');
+
+  const html = env.getOrCreateElement('log-list').innerHTML;
+  const isi = await ekspor(env);
+
+  const tampil = ['2026-10-02', '2026-09-25']
+    .filter(t => html.includes(t));
+  assert.deepEqual(tanggalDiBerkas(isi), tampil,
+    'Berkas harus memuat entri yang sama, dengan urutan yang sama seperti di layar');
+});
+
+test('Ekspor Logbook - kotak cari ikut mempersempit ekspor', async () => {
+  const env = createTestEnvironment(logData(logDenganRentang()));
+  await siap(env);
+
+  env.state.logSearchQuery = 'rekonsiliasi';
+  const isi = await ekspor(env);
+
+  assert.deepEqual(tanggalDiBerkas(isi), ['2026-10-02'],
+    'Cari teks harus ikut mempersempit isi berkas');
+});
+
+test('Ekspor Logbook - saringan yang bertahan setelah pindah tab tetap dipakai ekspor', async () => {
+  const env = createTestEnvironment(logData(logDenganRentang()));
+  await siap(env);
+
+  env.getOrCreateElement('log-date-from').value = '2026-09-26';
+  env.getOrCreateElement('log-date-from').trigger('change', { target: { value: '2026-09-26' } });
+  env.sandbox.switchTab('indeks');
+  env.sandbox.switchTab('log');
+
+  assert.equal(env.state.logDateFrom, '2026-09-26',
+    'Saringan harus bertahan setelah pindah tab');
+
+  const isi = await ekspor(env);
+  assert.deepEqual(tanggalDiBerkas(isi), ['2026-10-02', '2026-09-28'],
+    'Hanya batas bawah yang terisi, jadi entri setelah 2026-09-26 yang lolos, urutan menurun');
+});
+
+test('Ekspor Logbook - menghapus saringan mengembalikan ekspor ke seluruh entri', async () => {
+  const env = createTestEnvironment(logData(logDenganRentang()));
+  await siap(env);
+
+  env.state.logDateFrom = '2026-09-26';
+  env.state.logDateTo = '2026-09-30';
+  await ekspor(env);
+
+  env.state.logDateFrom = '';
+  env.state.logDateTo = '';
+  const isi = await ekspor(env);
+
+  assert.equal(tanggalDiBerkas(isi).length, 3,
+    'Setelah saringan dikosongkan, seluruh entri kembali keluar');
+});
+
+test('Ekspor Logbook - mengubah saringan tidak mengubah data.json dan tidak menambah request', async () => {
+  const env = createTestEnvironment(logData(logDenganRentang()));
+  await siap(env);
+
+  const sebelum = env.store['indeks_v1'];
+  const requestSebelum = env.backend.getJumlahRequest();
+
+  env.state.logDateFrom = '2026-09-26';
+  await ekspor(env);
+
+  assert.equal(env.store['indeks_v1'], sebelum,
+    'Menyaring dan mengekspor tidak boleh mengubah data.json');
+  assert.equal(env.backend.getJumlahRequest(), requestSebelum,
+    'Mengekspor tidak boleh menambah request ke backend');
 });

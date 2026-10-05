@@ -2152,6 +2152,14 @@ async function confirmDestructive(config) {
       });
     }
 
+    const eksporCsvBtn = document.getElementById('btn-ekspor-log-csv');
+    if (eksporCsvBtn && !eksporCsvBtn.dataset.boundClick) {
+      eksporCsvBtn.dataset.boundClick = 'true';
+      eksporCsvBtn.addEventListener('click', () => {
+        exportLogbookCsv();
+      });
+    }
+
     const logListContainer = document.getElementById('log-list');
     if (logListContainer && !logListContainer.dataset.boundClick) {
       logListContainer.dataset.boundClick = 'true';
@@ -2363,17 +2371,24 @@ async function confirmDestructive(config) {
     }
   }
 
-  function exportDataAsJson() {
-    const payload = normalizeData(state.data);
-    const jsonText = JSON.stringify(payload, null, 2);
-    const fileName = `indeks-data-${getTodayCompactString()}.json`;
-
-    const blob = new Blob([jsonText], { type: 'application/json' });
+  /**
+   * Mengunduh satu berkas ke peramban.
+   *
+   * Semua unduhan berbasis isi di dalam aplikasi melewati sini, supaya tidak
+   * ada yang perlu menyalin ulang cara memicu unduhan - termasuk alasan kenapa
+   * pelepasan objek unduhan harus ditunda, yang mudah hilang saat disalin.
+   *
+   * Unduhan berkas statis milik server tidak memakai helper ini: berkas itu
+   * sudah punya alamat sendiri, dan membacanya lewat Blob akan menambah
+   * request yang tidak perlu.
+   */
+  function unduhBerkas(namaBerkas, isi, tipeKonten) {
+    const blob = new Blob([isi], { type: tipeKonten });
     const downloadUrl = URL.createObjectURL(blob);
 
     const link = document.createElement('a');
     link.href = downloadUrl;
-    link.download = fileName;
+    link.download = namaBerkas;
     document.body.appendChild(link);
     link.click();
     if (link.parentNode) {
@@ -2384,6 +2399,75 @@ async function confirmDestructive(config) {
     setTimeout(() => {
       URL.revokeObjectURL(downloadUrl);
     }, 0);
+  }
+
+  function exportDataAsJson() {
+    const payload = normalizeData(state.data);
+    const jsonText = JSON.stringify(payload, null, 2);
+    unduhBerkas(`indeks-data-${getTodayCompactString()}.json`, jsonText, 'application/json');
+  }
+
+  // ==========================================================================
+  // Ekspor Logbook ke CSV (riset: docs/export-logbook-research.md)
+  // ==========================================================================
+  // Dua aturan di bawah bukan pilihan gaya; keduanya mencegah berkas yang
+  // rusak dibuka orang tanpa disadarinya.
+
+  // BOM di depan berkas. Tanpa ini Excel menebak encoding dan merusak teks
+  // non-ASCII seperti huruf beraksara, lalu pengguna harus melakukan langkah
+  // Data -> From Text -> pilih 65001 setiap kali membuka berkas.
+  // Sumber: "Opening CSV UTF-8 files correctly in Excel", Microsoft Support.
+  const BOM_UTF8 = '\uFEFF';
+
+  // Awal yang membuat Excel menafsirkan isi sel sebagai formula. Logbook diisi
+  // teks bebas, jadi nilai seperti =SUM(...) atau +1 yang berasal dari copy-tempel
+  // akan dievaluasi begitu berkasnya dibuka.
+  // Sumber: "CSV Injection", OWASP Foundation.
+  const AWAL_FORMULA = /^[=+\-@\t\r]/;
+
+  // Escape satu nilai sel. Dua lapis, urutannya penting: penjaga formula
+  // dipasang lebih dulu, supaya tanda kutip tunggal yang ditambahkan ikut
+  // tersimpan sebagai teks dan bukan ikut diperlakukan sebagai formula.
+  function selCsv(nilai) {
+    let teks = nilai === null || nilai === undefined ? '' : String(nilai);
+    if (AWAL_FORMULA.test(teks)) {
+      teks = "'" + teks;
+    }
+    // Kutip RFC 4180 hanya perlu bila isinya bisa memecah baris.
+    if (/[",\r\n]/.test(teks)) {
+      teks = '"' + teks.replace(/"/g, '""') + '"';
+    }
+    return teks;
+  }
+
+  // Menggabungkan tautan satu entri menjadi satu sel. Dipisah spasi supaya
+  // kolom tetap satu dan jumlah kolom tidak bergantung pada jumlah tautan.
+  function tautanLogKeTeks(logEntry) {
+    const links = logEntry && Array.isArray(logEntry.links) ? logEntry.links : [];
+    return links
+      .map(link => (link && link.url ? String(link.url) : ''))
+      .filter(Boolean)
+      .join(' ');
+  }
+
+  // Pemisah baris CRLF, bukan LF. LF saja membuat Excel di Windows membaca
+  // seluruh berkas sebagai satu kolom panjang.
+  function logbookKeCsv(logs) {
+    const baris = [['tanggal', 'catatan', 'tautan']];
+    for (const logEntry of logs) {
+      baris.push([logEntry.date, logEntry.teks, tautanLogKeTeks(logEntry)]);
+    }
+    return BOM_UTF8 + baris.map(r => r.map(selCsv).join(',')).join('\r\n');
+  }
+
+  function exportLogbookCsv() {
+    const allLogs = state.data && Array.isArray(state.data.logs) ? state.data.logs : [];
+    // Memakai filterLogs dengan argumen yang sama persis seperti saat merender
+    // daftar. Karena itu isi berkas tidak mungkin berbeda dari yang terlihat di
+    // layar, termasuk urutannya: yang diekspor adalah yang tampak.
+    const logs = filterLogs(allLogs, state.logSearchQuery, state.logDateFrom, state.logDateTo);
+    const csv = logbookKeCsv(logs);
+    unduhBerkas(`logbook-${getTodayCompactString()}.csv`, csv, 'text/csv;charset=utf-8');
   }
 
   // Bentuk berkas yang sama dengan yang diterima backend (arsitektur bagian 5)
@@ -2851,6 +2935,10 @@ async function confirmDestructive(config) {
     openLogModal,
     showDeleteLogConfirmation,
     exportDataAsJson,
+    unduhBerkas,
+    logbookKeCsv,
+    selCsv,
+    exportLogbookCsv,
     unduhContohData,
     validateImportedData,
     openImportFilePicker,
