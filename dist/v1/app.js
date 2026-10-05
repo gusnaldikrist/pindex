@@ -32,8 +32,8 @@
   // terbaca tanpa migrasi apa pun. Nilainya harus sama dengan
   // supportedVersion di src/pro/main.go supaya berkas hasil Export dan hasil
   // POST backend saling serasi (spec kontrak 5).
-  const supportedVersion = 2;
-  const VERSI_DITERIMA = [1, 2];
+  const supportedVersion = 3;
+  const VERSI_DITERIMA = [1, 2, 3];
 
   function createEmptyData() {
     return {
@@ -1586,13 +1586,18 @@ function deadlineHariKe(deadline, todayString) {
 
     const keep = spec.keep || (() => true);
     const compare = spec.compare || (() => 0);
+    // Field yang dibaca pencarian. Default-nya satu field, supaya TodoList dan
+    // pemanggil lain tidak ikut mendukung field yang tidak mereka punya.
+    const fields = (Array.isArray(spec.fields) && spec.fields.length > 0) ? spec.fields : ['teks'];
 
     const filtered = (Array.isArray(rows) ? rows : []).filter(row => {
       if (!keep(row)) return false;
       if (!normalizedQuery) return true;
 
-      const rowText = normalizeRowQuery(row.teks);
-      return rowText.includes(normalizedQuery);
+      // Dicocokkan per field, bukan dengan menggabungkan teksnya lebih dulu.
+      // Kalau digabung, kata bisa kejatuhan sebagian dari satu field dan
+      // sisanya dari field lain, dan itu bukan hasil yang orang maksud.
+      return fields.some(field => normalizeRowQuery(row[field]).includes(normalizedQuery));
     });
 
     // filter sudah menyalin, jadi sort di sini tidak menyentuh array pemanggil
@@ -2065,6 +2070,7 @@ async function confirmDestructive(config) {
     const toValue = DATE_PATTERN.test(String(dateTo || '')) ? String(dateTo) : '';
 
     return filterLinkedRows(logs, query, {
+      fields: ['teks', 'catatan'],
       keep(logEntry) {
         const entryDate = String(logEntry.date || '');
         if (fromValue && entryDate < fromValue) return false;
@@ -2084,7 +2090,6 @@ async function confirmDestructive(config) {
     const allLogs = (state.data && Array.isArray(state.data.logs)) ? state.data.logs : [];
 
     const filteredLogs = filterLogs(allLogs, state.logSearchQuery, state.logDateFrom, state.logDateTo);
-
     if (filteredLogs.length === 0) {
       const hasActiveFilter = state.logSearchQuery || state.logDateFrom || state.logDateTo;
       const emptyMessage = hasActiveFilter
@@ -2101,11 +2106,19 @@ async function confirmDestructive(config) {
 
     // ast-grep-ignore: no-inner-html-js
     logListContainer.innerHTML = filteredLogs.map(logEntry => {
+      const catatan = String(logEntry.catatan || '').trim();
+      // Entri tanpa catatan tidak boleh meninggalkan baris kosong di daftar.
+      const catatanHtml = catatan === ''
+        ? ''
+        : `<div class="log-catatan">${escapeHtml(catatan)}</div>`;
       return `
         <div class="log-item" data-id="${escapeHtml(logEntry.id)}">
           <div class="log-item-left">
             <span class="log-date-cell">${escapeHtml(logEntry.date || '')}</span>
-            <span class="log-text">${escapeHtml(logEntry.teks)}</span>
+            <div class="log-item-teks">
+              <span class="log-text">${escapeHtml(logEntry.teks)}</span>
+              ${catatanHtml}
+            </div>
           </div>
           <div class="log-item-actions">
             <button type="button" class="btn btn-secondary btn-sm btn-ubah-log" data-id="${escapeHtml(logEntry.id)}">Ubah</button>
@@ -2189,6 +2202,7 @@ async function confirmDestructive(config) {
 
     const isEdit = Boolean(logToEdit && logToEdit.id);
     const initialText = isEdit ? (logToEdit.teks || '') : '';
+    const initialCatatan = isEdit ? (logToEdit.catatan || '') : '';
     const initialDate = isEdit && DATE_PATTERN.test(String(logToEdit.date || ''))
       ? logToEdit.date
       : getTodayDateString();
@@ -2212,9 +2226,15 @@ async function confirmDestructive(config) {
           </div>
 
           <div class="form-group">
-            <label class="form-label" for="log-text">Teks logbook <span class="req">*</span></label>
-            <textarea id="log-text" class="form-textarea" maxlength="200" placeholder="Teks logbook (1-200 karakter)">${escapeHtml(initialText)}</textarea>
+            <label class="form-label" for="log-text">Ringkasan <span class="req">*</span></label>
+            <textarea id="log-text" class="form-textarea" maxlength="200" placeholder="Ringkasan singkat (1-200 karakter)">${escapeHtml(initialText)}</textarea>
             <div id="log-text-error" class="form-error" style="display: none;"></div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="log-catatan">Catatan</label>
+            <textarea id="log-catatan" class="form-textarea" maxlength="2000" placeholder="Catatan panjang (opsional, maksimal 2000 karakter)">${escapeHtml(initialCatatan)}</textarea>
+            <div class="form-hint">Boleh dikosongkan. Catatan tidak ikut dicari.</div>
           </div>
         <div class="modal-footer">
           <div></div>
@@ -2230,12 +2250,14 @@ async function confirmDestructive(config) {
 
     const dateInput = document.getElementById('log-date');
     const textArea = document.getElementById('log-text');
+    const catatanArea = document.getElementById('log-catatan');
     const saveBtn = document.getElementById('btn-log-save');
     const closeBtn = document.getElementById('btn-close-log-modal');
     const cancelBtn = overlay.querySelector('.btn-cancel-log-modal');
 
     if (dateInput) dateInput.value = initialDate;
     if (textArea && initialText) textArea.value = initialText;
+    if (catatanArea && initialCatatan) catatanArea.value = initialCatatan;
 
     function validateLogForm() {
       const textValue = textArea ? textArea.value.trim() : '';
@@ -2296,21 +2318,36 @@ async function confirmDestructive(config) {
 
         const textValue = textArea.value.trim();
         const dateValue = String(dateInput.value).trim();
+        const catatanValue = catatanArea ? catatanArea.value.trim() : '';
 
         const logs = (state.data && Array.isArray(state.data.logs)) ? state.data.logs : [];
+
+        // Catatan kosong berarti entri tanpa catatan: field-nya dihapus,
+        // bukan disimpan sebagai teks kosong, supaya entri yang tadinya tidak
+        // punya catatan tidak bertambah property baru pada berkas.
+        const setCatatan = (entry) => {
+          if (catatanValue !== '') {
+            entry.catatan = catatanValue;
+          } else {
+            delete entry.catatan;
+          }
+        };
 
         if (isEdit) {
           const logIdx = logs.findIndex(candidate => candidate.id === logToEdit.id);
           if (logIdx >= 0) {
             logs[logIdx].date = dateValue;
             logs[logIdx].teks = textValue;
+            setCatatan(logs[logIdx]);
           }
         } else {
-          logs.unshift({
+          const baru = {
             id: generateLogId(logs),
             date: dateValue,
             teks: textValue
-          });
+          };
+          setCatatan(baru);
+          logs.unshift(baru);
         }
 
         state.data.logs = logs;
@@ -2440,22 +2477,26 @@ async function confirmDestructive(config) {
     return teks;
   }
 
-  // Menggabungkan tautan satu entri menjadi satu sel. Dipisah spasi supaya
-  // kolom tetap satu dan jumlah kolom tidak bergantung pada jumlah tautan.
-  function tautanLogKeTeks(logEntry) {
-    const links = logEntry && Array.isArray(logEntry.links) ? logEntry.links : [];
-    return links
-      .map(link => (link && link.url ? String(link.url) : ''))
-      .filter(Boolean)
-      .join(' ');
-  }
-
   // Pemisah baris CRLF, bukan LF. LF saja membuat Excel di Windows membaca
   // seluruh berkas sebagai satu kolom panjang.
   function logbookKeCsv(logs) {
-    const baris = [['tanggal', 'catatan', 'tautan']];
+    // Urutan kolom: tanggal, ringkasan, catatan.
+    //
+    // Kolom kedua dulunya bernama "catatan" padahal isinya ringkasan. Waktu itu
+    // tidak menyesatkan karena belum ada field lain; begitu catatan jadi field
+    // yang benar-benar berbeda, nama itu membuat orang mengira kolom itu memuat
+    // isi panjang padahal isinya satu baris.
+    //
+    // Tidak ada kolom tautan. Entri logbook tidak punya field links, dan tidak
+    // ada bagian aplikasi yang bisa mengisinya - kolom seperti itu akan selalu
+    // kosong dan membuat orang mengira datanya hilang.
+    const baris = [['tanggal', 'ringkasan', 'catatan']];
     for (const logEntry of logs) {
-      baris.push([logEntry.date, logEntry.teks, tautanLogKeTeks(logEntry)]);
+      baris.push([
+        logEntry.date,
+        logEntry.teks,
+        logEntry.catatan
+      ]);
     }
     return BOM_UTF8 + baris.map(r => r.map(selCsv).join(',')).join('\r\n');
   }

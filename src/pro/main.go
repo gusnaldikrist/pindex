@@ -32,7 +32,9 @@ const (
 	//
 	// Field links pada entri todo dibuat opsional, jadi data versi 1 tetap
 	// sah tanpa perubahan apa pun: tidak ada migrasi yang harus dijalankan.
-	supportedVersion = 2
+	// Field catatan pada entri logbook juga opsional, jadi naik ke versi 3
+	// tidak memaksa siapa pun melakukan apa pun.
+	supportedVersion = 3
 )
 
 // versiDiterima adalah semua versi skema yang boleh muncul di berkas data.
@@ -42,7 +44,7 @@ const (
 // yang parses berkas ini. TestValidatePayload_MenerimaVersiLamaDanBaru
 // menjaga agar supportedVersion tidak pernah keluar dari daftar.
 func versiDiterima() []float64 {
-	return []float64{1, 2}
+	return []float64{1, 2, 3}
 }
 
 // validatePayload menolak apa pun yang bukan bentuk data Penanda.
@@ -108,6 +110,19 @@ func validatePayload(raw []byte) error {
 		}
 		if err := validTodoLinks(todo["links"]); err != nil {
 			return fmt.Errorf("field links pada todo indeks %d: %w", indeks, err)
+		}
+	}
+
+	// Field catatan pada entri logbook opsional, jadi yang tidak ada tetap
+	// sah. Yang diperiksa hanya bentuknya dan panjangnya, supaya berkas yang
+	// diterima backend sama persis dengan yang diterima frontend.
+	for indeks, entry := range parsed["logs"].([]any) {
+		logEntry, isObject := entry.(map[string]any)
+		if !isObject {
+			return fmt.Errorf("entri logbook pada indeks %d bukan objek", indeks)
+		}
+		if !validCatatan(logEntry["catatan"]) {
+			return fmt.Errorf("field catatan pada logbook indeks %d harus berupa teks maksimal %d karakter", indeks, maksCatatanChars)
 		}
 	}
 
@@ -178,6 +193,28 @@ func validTodoLinks(value any) error {
 // .length di JavaScript. Menghitung rune akan membuat keduanya berbeda tepat
 // pada teks yang memakai karakter di luar bidang dasar.
 const maksSopChars = 600
+
+// maksCatatanChars batas panjang field catatan pada satu entri logbook.
+//
+// Dihitung dalam satuan kode UTF-16, sama seperti maksSopChars, supaya
+// hasilnya sama dengan atribut maxlength di frontend dan dengan String
+// .length di JavaScript.
+const maksCatatanChars = 2000
+
+// validCatatan memeriksa satu nilai field catatan pada entri logbook.
+//
+// Field ini opsional, jadi nilai yang tidak ada sama sekali tetap sah. Yang
+// ditolak hanya bentuk yang salah dan yang melebihi batas.
+func validCatatan(value any) bool {
+	if value == nil {
+		return true
+	}
+	teks, isString := value.(string)
+	if !isString {
+		return false
+	}
+	return len(utf16.Encode([]rune(teks))) <= maksCatatanChars
+}
 
 // validSop memeriksa satu nilai field sop.
 //

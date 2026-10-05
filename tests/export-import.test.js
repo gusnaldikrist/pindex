@@ -929,8 +929,8 @@ test('Ekspor Logbook - berkas diawali BOM dan memakai pemisah baris CRLF', async
     'Pemisah baris harus CRLF');
   assert.doesNotMatch(csv.replace(/\r\n/g, ''), /\n/,
     'Tidak boleh ada LF sendirian di luar pasangan CRLF');
-  assert.match(csv, /tanggal,catatan,tautan/,
-    'Baris pertama harus kepala kolom');
+  assert.match(csv, /tanggal,ringkasan,catatan/,
+    'Baris pertama harus kepala kolom: tanggal, ringkasan, catatan');
 });
 
 test('Ekspor Logbook - sel yang diawali penghitung tidak dievaluasi sebagai formula', async () => {
@@ -968,21 +968,24 @@ test('Ekspor Logbook - koma, kutip, dan baris baru tidak merusak kolom', async (
   assert.equal(tanpa, 'biasa saja', 'Sel biasa tidak boleh diapit kutip');
 });
 
-test('Ekspor Logbook - tautan ikut diekspor dalam satu kolom', async () => {
+// Entri logbook tidak punya field links, dan tidak ada bagian aplikasi yang
+// bisa mengisinya. Test ini menutup kemungkinan kolom tautan muncul lagi di
+// CSV: kalau suatu saat ada yang menambahkannya tanpa membuat formnya, test ini
+// yang akan menggigit, bukan pengguna yang menemukan kolom kosong di Excel.
+
+test('Ekspor Logbook - CSV tidak punya kolom tautan', async () => {
   const env = createTestEnvironment(logData([]));
   await siap();
 
   const csv = env.sandbox.logbookKeCsv([
-    { date: '2026-09-29', teks: 'Ada tautan', links: [
-      { url: 'https://a.test' }, { url: 'https://b.test' }
-    ] },
-    { date: '2026-09-30', teks: 'Tanpa tautan' }
+    { date: '2026-09-29', teks: 'Entri biasa' }
   ]);
 
-  assert.match(csv, /https:\/\/a\.test https:\/\/b\.test/,
-    'Dua tautan harus masuk satu sel, dipisah spasi');
-  assert.equal((csv.match(/2026-09-30/g) || []).length, 1,
-    'Entri tanpa tautan tetap punya baris, kolom tautannya kosong');
+  assert.doesNotMatch(csv, /tautan/,
+    'Kolom tautan tidak boleh ada: entri logbook tidak punya field links');
+  const kepala = parseCsv(csv)[0];
+  assert.deepEqual(kepala, ['tanggal', 'ringkasan', 'catatan'],
+    'Kepala kolom harus tepat tiga kolom');
 });
 
 test('Ekspor Logbook - mengunduh lewat tombol Ekspor CSV', async () => {
@@ -1036,6 +1039,29 @@ test('Ekspor Logbook - tombolnya ada di markup halaman', () => {
     'Tombol Ekspor CSV harus berada di baris kendali yang sama dengan tombol Catat');
 });
 
+test('Ekspor Logbook - tombolnya seukuran tombol lain di baris kendali', () => {
+  const html = fs.readFileSync(indexHtmlPath, 'utf8');
+  const css = fs.readFileSync(styleCssPath, 'utf8');
+
+  // btn-sm memaksa tinggi 26px, sedangkan kendali lain di baris kendali memakai
+  // --control-height, jadi tombolnya terlihat lebih kecil di tengah baris.
+  const baris = html.match(/<div class="log-header-row">([\s\S]*?)<\/div>\s*<div id="log-list"/);
+  assert.ok(baris, 'Baris kendali Logbook harus ada');
+  const tombolDiBaris = baris[1].match(/<button[^>]*>/g) || [];
+
+  assert.ok(tombolDiBaris.length >= 2, 'Baris kendali Logbook punya beberapa tombol');
+  for (const tag of tombolDiBaris) {
+    assert.doesNotMatch(tag, /\bbtn-sm\b/,
+      `Tombol di baris kendali Logbook tidak boleh memakai btn-sm: ${tag.slice(0, 90)}`);
+  }
+
+  // Aturan baris kendali harus menormalkan tinggi, bukan hanya radius.
+  const aturanBaris = css.match(/\.search-bar-row \.btn,[\s\S]*?\{([\s\S]*?)\}/);
+  assert.ok(aturanBaris, 'Aturan baris kendali harus ada');
+  assert.match(aturanBaris[1], /height:\s*var\(--control-height\)/,
+    'Aturan baris kendali harus menormalkan tinggi, kalau tidak tombol sekelas btn-sm akan lebih kecil');
+});
+
 // ---------------------------------------------------------------------------
 // Ekspor Logbook mengikuti saringan yang aktif
 // ---------------------------------------------------------------------------
@@ -1063,6 +1089,52 @@ async function ekspor(env) {
 function tanggalDiBerkas(isiCsv) {
   const baris = isiCsv.replace(/^\uFEFF/, '').split('\r\n').slice(1);
   return baris.filter(Boolean).map(b => b.split(',')[0]);
+}
+
+// Parser CSV seadanya: cukup untuk berkas yang Rakitan logbook hasilkan, yaitu
+// penanda kutip RFC 4180 dan pemisah koma. Dipakai supaya pengujian bisa
+// memeriksa nama dan isi tiap kolom secara terpisah, bukan cuma mencocokkan
+// potongan teks di dalam baris.
+function parseCsv(isiCsv) {
+  // LF dan CR ditulis lewat fromCharCode, bukan escape, supaya berkas ini
+  // tidak bisa rusak kalau ada yang mengubah akhir barisnya.
+  const LF = String.fromCharCode(10);
+  const CR = String.fromCharCode(13);
+  const hasil = [];
+  let sel = [];
+  let sedang = '';
+  let diKutip = false;
+  const teks = isiCsv.replace(/^\uFEFF/, '');
+
+  const tutupBaris = () => {
+    sel.push(sedang);
+    sedang = '';
+    if (sel.some(v => v !== '')) hasil.push(sel);
+    sel = [];
+  };
+
+  for (let i = 0; i < teks.length; i++) {
+    const c = teks[i];
+    if (c === '"') {
+      if (diKutip && teks[i + 1] === '"') {
+        sedang += '"';
+        i++;
+      } else {
+        diKutip = !diKutip;
+      }
+    } else if (c === ',' && !diKutip) {
+      sel.push(sedang);
+      sedang = '';
+    } else if ((c === LF || c === CR) && !diKutip) {
+      if (c === CR && teks[i + 1] === LF) i++;
+      tutupBaris();
+    } else {
+      sedang += c;
+    }
+  }
+  if (sedang !== '' || sel.length > 0) tutupBaris();
+
+  return hasil;
 }
 
 test('Ekspor Logbook - rentang terisi hanya mengekspor entri di dalam rentang', async () => {
@@ -1163,4 +1235,87 @@ test('Ekspor Logbook - mengubah saringan tidak mengubah data.json dan tidak mena
     'Menyaring dan mengekspor tidak boleh mengubah data.json');
   assert.equal(env.backend.getJumlahRequest(), requestSebelum,
     'Mengekspor tidak boleh menambah request ke backend');
+});
+
+// ---------------------------------------------------------------------------
+// Ekspor CSV: kolom ringkasan, catatan, dan tautan
+// ---------------------------------------------------------------------------
+// Kolom kedua dulu bernama `catatan` padahal isinya ringkasan. Begitu catatan
+// jadi field yang benar-benar berbeda, nama itu menyesatkan.
+
+function logLengkap() {
+  return [
+    { id: 'l1', date: '2026-10-02', teks: 'Rekonsiliasi kas', catatan: 'Libre akun tabular belum diimpor' },
+    { id: 'l2', date: '2026-10-01', teks: 'Rapat pagi' }
+  ];
+}
+
+test('Ekspor CSV - kepala kolom Persis tanggal, ringkasan, catatan, tautan', async () => {
+  const env = createTestEnvironment({
+    version: 3, items: [], todo: [], logs: logLengkap()
+  });
+  await siap();
+
+  const baris = parseCsv(env.sandbox.logbookKeCsv(logLengkap()));
+  assert.deepEqual(baris[0], ['tanggal', 'ringkasan', 'catatan'],
+    'Kepala kolom harus menyebut ringkasan dan catatan secara terpisah');
+});
+
+test('Ekspor CSV - isi tiap kolom tidak tertukar', async () => {
+  const env = createTestEnvironment({
+    version: 3, items: [], todo: [], logs: logLengkap()
+  });
+  await siap();
+
+  const baris = parseCsv(env.sandbox.logbookKeCsv(logLengkap()));
+  const isi = Object.fromEntries(baris[0].map((nama, i) => [nama, baris[1][i]]));
+
+  assert.equal(isi.tanggal, '2026-10-02');
+  assert.equal(isi.ringkasan, 'Rekonsiliasi kas',
+    'Kolom ringkasan harus memuat teks ringkas, bukan catatan');
+  assert.equal(isi.catatan, 'Libre akun tabular belum diimpor',
+    'Kolom catatan harus memuat catatan, bukan ringkasan');
+  });
+
+test('Ekspor CSV - entri tanpa catatan tetap punya ketiga kolom', async () => {
+  const env = createTestEnvironment({
+    version: 3, items: [], todo: [], logs: logLengkap()
+  });
+  await siap();
+
+  const baris = parseCsv(env.sandbox.logbookKeCsv(logLengkap()));
+  const tanpa = baris.find(b => b[0] === '2026-10-01');
+
+  assert.equal(tanpa.length, 3, 'Entri tanpa catatan tetap harus punya tiga kolom');
+  assert.equal(tanpa[2], '', 'Kolom catatan harus kosong, bukan hilang');
+});
+
+test('Ekspor CSV - catatan berkoma, berkutip, dan berbaris baru tidak merusak kolom', async () => {
+  const env = createTestEnvironment({
+    version: 3, items: [], todo: [], logs: []
+  });
+  await siap();
+
+  const catatanBerat = 'Tabel, kolom "Nilai"\ndan baris kedua';
+  const baris = parseCsv(env.sandbox.logbookKeCsv([
+    { date: '2026-10-01', teks: 'Ringkasan, dengan koma', catatan: catatanBerat }
+  ]));
+
+  assert.equal(baris[1][1], 'Ringkasan, dengan koma', 'Ringkasan berkoma harus utuh');
+  assert.equal(baris[1][2], catatanBerat, 'Catatan berkoma, berkutip, dan berbaris baru harus utuh');
+  assert.equal(baris.length, 2, 'Catatan berbaris baru tidak boleh menambah jumlah baris');
+});
+
+test('Ekspor CSV - penjaga formula berlaku pada kolom catatan', async () => {
+  const env = createTestEnvironment({
+    version: 3, items: [], todo: [], logs: []
+  });
+  await siap();
+
+  const baris = parseCsv(env.sandbox.logbookKeCsv([
+    { date: '2026-10-01', teks: 'Ringkasan', catatan: '=HYPERLINK("http://x.test")' }
+  ]));
+
+  assert.ok(baris[1][2].startsWith("'"),
+    'Catatan yang diawali penghitung harus mendapat awalan kutip tunggal');
 });

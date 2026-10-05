@@ -65,3 +65,10 @@ penjaga formula menggigit pengujian penjaga formula.
 
 Yang belum terpenuhi: berkasnya belum dibuka di Microsoft Excel sungguhan. Itu
 butuh manusia dan memang tidak bisa dibuktikan pengujian.
+
+## Koreksi 2026-10-05
+
+Kriteria tentang tautan dibatalkan. Entri logbook tidak pernah punya field
+`links` dan tidak ada bagian aplikasi yang mengisinya, jadi kolom tautan di CSV
+hanya akan selalu kosong. User memutuskan Logbook tidak perlu tautan. Helper
+`tautanLogKeTeks` dihapus sekaligus.

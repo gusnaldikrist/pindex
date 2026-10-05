@@ -76,19 +76,59 @@ func TestValidatePayload_MenolakVersionTidakDikenal(t *testing.T) {
 }
 
 func TestValidatePayload_MenerimaVersiLamaDanBaru(t *testing.T) {
-	// Field links pada todo opsional, jadi data versi 1 tidak perlu migrasi
-	// apa pun: ia harus tetap diterima, dan berkas baru ditulis versi 2.
-	for _, versi := range []string{"1", "2"} {
+	// Field links pada todo dan field catatan pada logbook keduanya opsional,
+	// jadi data versi lama tidak perlu migrasi apa pun: semuanya harus tetap
+	// diterima, dan berkas baru ditulis dengan versi terbaru.
+	for _, versi := range []string{"1", "2", "3"} {
 		payload := `{"version":` + versi + `,"items":[],"todo":[],"logs":[]}`
 		if err := validatePayload([]byte(payload)); err != nil {
 			t.Fatalf("version %s harus diterima: %v", versi, err)
 		}
 	}
-	if supportedVersion != 2 {
-		t.Fatalf("versi yang ditulis untuk berkas baru harus 2, dapat %d", supportedVersion)
+	if supportedVersion != 3 {
+		t.Fatalf("versi yang ditulis untuk berkas baru harus 3, dapat %d", supportedVersion)
 	}
 	if !slices.Contains(versiDiterima(), float64(supportedVersion)) {
 		t.Fatalf("supportedVersion %d harus ada di versiDiterima()", supportedVersion)
+	}
+}
+
+func TestValidatePayload_MenerimaCatatanYangOpsional(t *testing.T) {
+	boleh := []string{
+		`{"id":"l1","date":"2026-10-05","teks":"Ringkasan"}`,
+		`{"id":"l1","date":"2026-10-05","teks":"Ringkasan","catatan":null}`,
+		`{"id":"l1","date":"2026-10-05","teks":"Ringkasan","catatan":""}`,
+	}
+	for _, entry := range boleh {
+		payload := `{"version":3,"items":[],"todo":[],"logs":[` + entry + `]}`
+		if err := validatePayload([]byte(payload)); err != nil {
+			t.Fatalf("entri logbook %s harus diterima: %v", entry, err)
+		}
+	}
+
+	// Bentuk salah dan yang melebihi batas harus ditolak.
+	panjang := strings.Repeat("a", maksCatatanChars+1)
+	ditolak := []string{
+		`{"id":"l1","teks":"R","catatan":42}`,
+		`{"id":"l1","teks":"R","catatan":["teks"]}`,
+		`{"id":"l1","teks":"R","catatan":"` + panjang + `"}`,
+	}
+	for _, entry := range ditolak {
+		payload := `{"version":3,"items":[],"todo":[],"logs":[` + entry + `]}`
+		if err := validatePayload([]byte(payload)); err == nil {
+			t.Fatalf("entri logbook %s harus ditolak", entry)
+		}
+	}
+
+	// Tepat pada batas harus diterima.
+	tepat := `{"id":"l1","teks":"R","catatan":"` + strings.Repeat("a", maksCatatanChars) + `"}`
+	if err := validatePayload([]byte(`{"version":3,"items":[],"todo":[],"logs":[` + tepat + `]}`)); err != nil {
+		t.Fatalf("catatan tepat pada batas harus diterima: %v", err)
+	}
+
+	// Entri logbook yang bukan objek ikut ditolak, sama seperti todo dan item.
+	if err := validatePayload([]byte(`{"version":3,"items":[],"todo":[],"logs":["bukan objek"]}`)); err == nil {
+		t.Fatal("entri logbook yang bukan objek harus ditolak")
 	}
 }
 

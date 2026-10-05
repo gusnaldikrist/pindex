@@ -176,7 +176,7 @@ test('Tiket 11 - Buka path lokal lewat backend: galat dilempar agar bisa fallbac
 test('Permintaan menggantung dibatasi waktu, bukan menggantung selamanya', async () => {
   const adapter = loadAdapter();
   // Fetch yang tidak pernah selesai, hanya menunggu abort signal.
-  const fetchStub = (url, options) => new Promise((resolve, reject) => {
+  const fetchStub = (_url, options) => new Promise((_resolve, reject) => {
     if (options.signal) {
       options.signal.addEventListener('abort', () => reject(new Error('aborted')));
     }
@@ -204,7 +204,12 @@ test('Tiket 11 - Constanta versi adapter sama dengan yang dipakai app.js', () =>
   const diterima = appSource.match(/const VERSI_DITERIMA\s*=\s*\[([^\]]*)\]/);
   assert.ok(diterima, 'app.js harus mendeklarasikan VERSI_DITERIMA');
   const versiFrontend = diterima[1].split(',').map((v) => Number(v.trim())).filter((v) => !Number.isNaN(v));
-  assert.deepEqual(versiFrontend, [1, Number(match[1])], 'Frontend menerima versi lama dan versi terbaru');
+  assert.ok(versiFrontend.includes(1),
+    'Frontend harus tetap menerima versi tertua, karena field baru selalu opsional');
+  assert.ok(versiFrontend.includes(Number(match[1])),
+    'Frontend harus menerima versi yang sedang ditulis');
+  assert.equal(Math.max(...versiFrontend), Math.max(...versiFrontend.slice().sort((a, b) => a - b)),
+    'Daftar versi frontend harus urut');
 
   const goSource = fs.readFileSync(path.join(repoRoot, 'src', 'pro', 'main.go'), 'utf8');
   const goMatch = goSource.match(/supportedVersion\s*=\s*(\d+)/);

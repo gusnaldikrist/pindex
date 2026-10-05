@@ -1008,7 +1008,11 @@ body {
   content: "▸ ";
 }
 
-.result-catatan {
+/* Catatan panjang dipotong dua baris dengan elipsis. Dipakai di tabel Indeks
+   dan di daftar Logbook, jadi pemotongan satu gaya terlihat sama di dua
+   tempat. */
+.result-catatan,
+.log-catatan {
   font-size: var(--font-body);
   color: var(--body);
   line-height: 1.5;
@@ -1618,13 +1622,15 @@ body {
   flex-shrink: 0;
 }
 
-/* Semua kendali dalam baris kendali satu tab memakai radius yang sama, bukan
-   cuma kotak cari dan saringan. Tanpa ini tombol tambah terlihat seperti dari
-   komponen lain karena radiusnya 4px, bukan 6px. */
+/* Semua kendali dalam baris kendali satu tab memakai tinggi dan radius yang
+   sama, bukan cuma kotak cari dan saringan. Tanpa ini tombol tambah terlihat
+   seperti dari komponen lain karena radiusnya 4px, bukan 6px, dan tombol
+   sekelas btn-sm terlihat lebih kecil di tengah baris yang isinya setinggi. */
 .search-bar-row .btn,
 .todo-header-row .btn,
 .log-header-row .btn {
   border-radius: var(--radius-md);
+  height: var(--control-height);
 }
 
 .btn-todo-filter {
@@ -1840,6 +1846,17 @@ body {
   color: var(--ink);
   line-height: 1.5;
   word-break: break-word;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Ringkasan dan catatan bertumpuk di kolom yang sama, supaya catatan muncul
+   tepat di bawah ringkasannya dan bukan di sebelahnya. Kolom tanggal tetap di
+   luar, karena lebarnya tetap 90px. */
+.log-item-teks {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   flex: 1 1 auto;
   min-width: 0;
 }

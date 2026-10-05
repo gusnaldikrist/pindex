@@ -779,3 +779,220 @@ test('Tiket 08 - Verifikasi CSS: memakai token resmi tanpa var(--surface)', () =
   assert.ok(logItemBlock, 'Blok .log-item harus ditemukan');
   assert.match(logItemBlock[1], /display:\s*flex/, 'Baris log harus memakai flex');
 });
+
+// ---------------------------------------------------------------------------
+// Field catatan pada entri Logbook
+// ---------------------------------------------------------------------------
+// `teks` tetap jadi ringkasan satu baris, `catatan` jadi isi panjang. Keduanya
+// punya peran berbeda; kalau keduanya teks bebas tanpa pembeda, ada data yang
+// terduplikasi.
+
+async function siapLog(env) {
+  await new Promise(resolve => setImmediate(resolve));
+  await new Promise(resolve => setImmediate(resolve));
+  return env;
+}
+
+test('Catatan logbook - menyimpan catatan panjang bersama ringkasan', async () => {
+  const env = await siapLog(createTestEnvironment(JSON.parse(fs.readFileSync(exampleJsonPath, 'utf8'))));
+  const { switchTab, openLogModal } = env.sandbox;
+  switchTab('log');
+
+  openLogModal(null);
+  env.getOrCreateElement('log-text').value = 'Rekonsiliasi kas Oktober';
+  env.getOrCreateElement('log-text').trigger('input');
+  const catatanLama = 'Libre akun tabular belum diimpor. Menunggu berkas dari bagian keuangan.\nBatas akhir minggu ini.';
+  env.getOrCreateElement('log-catatan').value = catatanLama;
+  env.getOrCreateElement('btn-log-save').trigger('click');
+  await new Promise(resolve => setImmediate(resolve));
+  await new Promise(resolve => setImmediate(resolve));
+
+  const tersimpan = JSON.parse(env.store['indeks_v1']);
+  const baru = tersimpan.logs.find(e => e.teks === 'Rekonsiliasi kas Oktober');
+  assert.ok(baru, 'Entri log harus tersimpan');
+  assert.equal(baru.catatan, catatanLama, 'Catatan harus tersimpan utuh, termasuk baris baru di dalamnya');
+  assert.equal(baru.teks, 'Rekonsiliasi kas Oktober', 'Ringkasan harus tetap terpisah dari catatan');
+});
+
+test('Catatan logbook - mengosongkan catatan menghapus fieldnya', async () => {
+  const env = await siapLog(createTestEnvironment({
+    version: 3, items: [], todo: [],
+    logs: [{ id: 'l1', date: '2026-10-01', teks: 'Ringkasan', catatan: 'Catatan lama' }]
+  }));
+  const { switchTab, openLogModal } = env.sandbox;
+  switchTab('log');
+
+  // Buka modal ubah untuk entri yang catatannya sudah ada. Entri diambil
+  // dari isi berkas karena harness ini tidak mengekspos state.
+  const [entriLama] = JSON.parse(env.store['indeks_v1']).logs;
+  openLogModal(entriLama);
+  assert.equal(env.getOrCreateElement('log-catatan').value, 'Catatan lama',
+    'Form ubah harus memuat catatan yang sudah ada');
+
+  env.getOrCreateElement('log-catatan').value = '';
+  env.getOrCreateElement('btn-log-save').trigger('click');
+  await new Promise(resolve => setImmediate(resolve));
+  await new Promise(resolve => setImmediate(resolve));
+
+  const tersimpan = JSON.parse(env.store['indeks_v1']);
+  assert.equal('catatan' in tersimpan.logs[0], false,
+    'Field catatan harus dihapus, bukan disimpan sebagai teks kosong');
+});
+
+test('Catatan logbook - entri tanpa catatan tidak meninggalkan celah di daftar', async () => {
+  const env = await siapLog(createTestEnvironment({
+    version: 3, items: [], todo: [],
+    logs: [
+      { id: 'l1', date: '2026-10-02', teks: 'Punya catatan', catatan: 'Ada isinya' },
+      { id: 'l2', date: '2026-10-01', teks: 'Tanpa catatan' }
+    ]
+  }));
+  env.sandbox.switchTab('log');
+
+  const html = env.getOrCreateElement('log-list').innerHTML;
+  assert.match(html, /Ada isinya/, 'Catatan harus tampil di daftar');
+  assert.equal((html.match(/log-catatan/g) || []).length, 1,
+    'Hanya entri yang punya catatan yang boleh memakai kelas log-catatan');
+});
+
+test('Catatan logbook - catatan di luar daftar tidak boleh menimpa ringkasan', async () => {
+  const env = await siapLog(createTestEnvironment({
+    version: 3, items: [], todo: [],
+    logs: [{ id: 'l1', date: '2026-10-01', teks: 'Ringkasan', catatan: '<img src=x onerror=alert(1)>' }]
+  }));
+  env.sandbox.switchTab('log');
+
+  const html = env.getOrCreateElement('log-list').innerHTML;
+  assert.doesNotMatch(html, /<img src=x/,
+    'Catatan harus lewat escapeHtml, tidak boleh menjadi markup');
+  assert.match(html, /&lt;img src=x/,
+    'Catatan harus tampil sebagai teks yang sudah di-escape');
+});
+
+test('Catatan logbook - formnya memisahkan ringkasan dan catatan', async () => {
+  const env = await siapLog(createTestEnvironment(JSON.parse(fs.readFileSync(exampleJsonPath, 'utf8'))));
+  env.sandbox.switchTab('log');
+  env.sandbox.openLogModal(null);
+
+  const isi = env.activeModals[0].innerHTML;
+  assert.match(isi, /for="log-text">Ringkasan/, 'Label ringkasan harus tertulis Ringkasan');
+  assert.match(isi, /for="log-catatan"/, 'Harus ada kolom Catatan');
+  assert.match(isi, /id="log-catatan"[^>]*maxlength="2000"/,
+    'Kolom catatan harus dibatasi 2000 karakter');
+  assert.match(isi, /id="log-text"[^>]*maxlength="200"/,
+    'Ringkasan harus tetap dibatasi 200 karakter');
+});
+
+test('Catatan logbook - entri lama tanpa catatan tetap terbaca', async () => {
+  // Berkas versi 2 tidak punya field catatan sama sekali.
+  const env = await siapLog(createTestEnvironment({
+    version: 2, items: [], todo: [],
+    logs: [{ id: 'l1', date: '2026-10-01', teks: 'Dari berkas lama' }]
+  }));
+  env.sandbox.switchTab('log');
+
+  const html = env.getOrCreateElement('log-list').innerHTML;
+  assert.match(html, /Dari berkas lama/, 'Entri lama harus tetap tampil');
+  assert.doesNotMatch(html, /log-catatan/, 'Entri lama tidak punya catatan untuk ditampilkan');
+  assert.equal(JSON.parse(env.store['indeks_v1']).version, 2,
+    'Berkas lama dipakai apa adanya, tidak ada migrasi yang dijalankan');
+});
+
+test('Catatan logbook - ekspor JSON penuh membawa catatan', async () => {
+  const env = await siapLog(createTestEnvironment({
+    version: 3, items: [], todo: [],
+    logs: [{ id: 'l1', date: '2026-10-01', teks: 'Ringkasan', catatan: 'Catatan untuk cadangan' }]
+  }));
+
+  const { validateImportedData } = env.sandbox;
+  const hasil = validateImportedData(JSON.parse(env.store['indeks_v1']));
+  assert.equal(hasil.valid, true, 'Berkas dengan catatan harus tetap sah');
+});
+
+// ---------------------------------------------------------------------------
+// Pencarian logbook membaca catatan
+// ---------------------------------------------------------------------------
+// Catatan adalah isi sebenarnya dari sebuah entri, sementara ringkasan cuma
+// satu baris. Kalau pencarian hanya membaca ringkasan, orang akan mengetik
+// kata yang dia ingat menulis di catatan dan tidak menemukannya.
+
+test('Pencarian logbook - kata yang hanya ada di catatan menemukan entri', async () => {
+  const env = await siapLog(createTestEnvironment({
+    version: 3, items: [], todo: [],
+    logs: [{ id: 'l1', date: '2026-10-01', teks: 'Rekonsiliasi kas', catatan: 'Libre akun tabular belum diimpor' }]
+  }));
+  const { filterLogs } = env.sandbox;
+
+  const hasil = filterLogs(JSON.parse(env.store['indeks_v1']).logs, 'tabular', '', '');
+  assert.deepEqual(hasil.map(e => e.id), ['l1'],
+    'Kata yang hanya ada di catatan harus menemukan entri itu');
+});
+
+test('Pencarian logbook - kata di ringkasan tetap menemukan entri', async () => {
+  const env = await siapLog(createTestEnvironment({
+    version: 3, items: [], todo: [],
+    logs: [{ id: 'l1', date: '2026-10-01', teks: 'Rekonsiliasi kas', catatan: 'catatan lain' }]
+  }));
+  const { filterLogs } = env.sandbox;
+
+  const hasil = filterLogs(JSON.parse(env.store['indeks_v1']).logs, 'rekonsiliasi', '', '');
+  assert.deepEqual(hasil.map(e => e.id), ['l1'],
+    'Perilaku lama pada ringkasan harus tetap berlaku');
+});
+
+test('Pencarian logbook - kata di kedua field tidak menghasilkan entri dobel', async () => {
+  const env = await siapLog(createTestEnvironment({
+    version: 3, items: [], todo: [],
+    logs: [{ id: 'l1', date: '2026-10-01', teks: 'kas', catatan: 'kas juga' }]
+  }));
+  const { filterLogs } = env.sandbox;
+
+  const hasil = filterLogs(JSON.parse(env.store['indeks_v1']).logs, 'kas', '', '');
+  assert.deepEqual(hasil.map(e => e.id), ['l1'],
+    'Entri yang cocok di kedua field tetap muncul sekali');
+});
+
+test('Pencarian logbook - kata tidak boleh kejatuhan lintas dua field', async () => {
+  const env = await siapLog(createTestEnvironment({
+    version: 3, items: [], todo: [],
+    logs: [{ id: 'l1', date: '2026-10-01', teks: 'rekonsiliasi kas', catatan: 'tabular bulanan' }]
+  }));
+  const { filterLogs } = env.sandbox;
+
+  // "rekonsiliasi" ada di ringkasan dan "bulanan" ada di catatan, tapi gabungannya
+  // tidak ada di satu field pun. Kalau teksnya digabung lebih dulu, kata ini
+  // akan cocok dan itu bukan hasil yang orang maksud.
+  const hasil = filterLogs(JSON.parse(env.store['indeks_v1']).logs, 'rekonsiliasi bulanan', '', '');
+  assert.deepEqual(hasil.map(e => e.id), [],
+    'Kata yang sebagian dari satu field dan sebagian dari field lain tidak boleh cocok');
+});
+
+test('Pencarian logbook - entri tanpa catatan tidak membuat pencarian gagal', async () => {
+  const env = await siapLog(createTestEnvironment({
+    version: 3, items: [], todo: [],
+    logs: [
+      { id: 'l1', date: '2026-10-02', teks: 'Punya catatan', catatan: 'kneedle' },
+      { id: 'l2', date: '2026-10-01', teks: 'Tanpa catatan' }
+    ]
+  }));
+  const { filterLogs } = env.sandbox;
+
+  const hasil = filterLogs(JSON.parse(env.store['indeks_v1']).logs, 'kneedle', '', '');
+  assert.deepEqual(hasil.map(e => e.id), ['l1'],
+    'Entri tanpa catatan harus dilewati tanpa error, bukan membuat pencarian kosong');
+});
+
+test('Pencarian logbook - TodoList tidak ikut membaca catatan', async () => {
+  const env = await siapLog(createTestEnvironment({
+    version: 3, items: [], todo: [], logs: []
+  }));
+  const { filterTodos } = env.sandbox;
+
+  // Entri todo tidak punya field catatan sama sekali. Kalau filterLinkedRows
+  // ikut membacanya, TodoList diam-diam mendukung field yang tidak ada di sana.
+  const todos = [{ id: 't1', teks: 'Opsi lapar', done: false, deadline: null, updated_at: '2026-01-01' }];
+  assert.deepEqual(filterTodos(todos, 'kneedle', 'semua').map(t => t.id), [],
+    'TodoList tidak boleh mencari di field yang tidak dimilikinya');
+  assert.deepEqual(filterTodos(todos, 'lapar', 'semua').map(t => t.id), ['t1'],
+    'Pencarian TodoList pada teksnya harus tetap berfungsi');
+});
