@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -71,6 +72,61 @@ func TestValidatePayload_MenolakVersionTidakDikenal(t *testing.T) {
 	// (spec kontrak 5).
 	if err := validatePayload([]byte(`{"version":1.5,"items":[],"todo":[],"logs":[]}`)); err == nil {
 		t.Fatal("version 1.5 harus ditolak, sama seperti di frontend")
+	}
+}
+
+func TestValidatePayload_MenerimaVersiLamaDanBaru(t *testing.T) {
+	// Field links pada todo opsional, jadi data versi 1 tidak perlu migrasi
+	// apa pun: ia harus tetap diterima, dan berkas baru ditulis versi 2.
+	for _, versi := range []string{"1", "2"} {
+		payload := `{"version":` + versi + `,"items":[],"todo":[],"logs":[]}`
+		if err := validatePayload([]byte(payload)); err != nil {
+			t.Fatalf("version %s harus diterima: %v", versi, err)
+		}
+	}
+	if supportedVersion != 2 {
+		t.Fatalf("versi yang ditulis untuk berkas baru harus 2, dapat %d", supportedVersion)
+	}
+	if !slices.Contains(versiDiterima(), float64(supportedVersion)) {
+		t.Fatalf("supportedVersion %d harus ada di versiDiterima()", supportedVersion)
+	}
+}
+
+func TestValidatePayload_MenerimaLinksTodoYangOpsional(t *testing.T) {
+	// Todo tanpa tautan tetap sah: field boleh tidak ada, boleh null, boleh
+	// array kosong. Kriteria penerimaan 1 dan 7.
+	boleh := []string{
+		`{"id":"t1","teks":"Tanpa tautan"}`,
+		`{"id":"t1","teks":"Tanpa tautan","links":null}`,
+		`{"id":"t1","teks":"Tanpa tautan","links":[]}`,
+	}
+	for _, todo := range boleh {
+		payload := `{"version":2,"items":[],"todo":[` + todo + `],"logs":[]}`
+		if err := validatePayload([]byte(payload)); err != nil {
+			t.Fatalf("todo %s harus diterima: %v", todo, err)
+		}
+	}
+
+	// Bentuk yang salah harus ditolak.
+	ditolak := []string{
+		`{"id":"t1","teks":"Salah","links":"bukan array"}`,
+		`{"id":"t1","teks":"Salah","links":["https://x.test"]}`,
+		`{"id":"t1","teks":"Salah","links":[{"label":" tanpa url"}]}`,
+		`{"id":"t1","teks":"Salah","links":[{"url":""}]}`,
+		`{"id":"t1","teks":"Salah","links":[{"url":"   "}]}`,
+		`{"id":"t1","teks":"Salah","links":[{"url":42}]}`,
+	}
+	for _, todo := range ditolak {
+		payload := `{"version":2,"items":[],"todo":[` + todo + `],"logs":[]}`
+		if err := validatePayload([]byte(payload)); err == nil {
+			t.Fatalf("todo %s harus ditolak", todo)
+		}
+	}
+
+	// Entri todo yang bukan objek ikut ditolak, sama seperti item.
+	payload := `{"version":2,"items":[],"todo":["bukan objek"],"logs":[]}`
+	if err := validatePayload([]byte(payload)); err == nil {
+		t.Fatal("entri todo yang bukan objek harus ditolak")
 	}
 }
 
@@ -227,15 +283,16 @@ func TestWriteData_TidakMenggantiDataLamaSaatPayloadTidakSah(t *testing.T) {
 	}
 }
 
-func TestEmptyData_MengandungVersionSatu(t *testing.T) {
-	// Arsitektur bagian 3: berkas belum ada dijawab bentuk kosong berisi version 1
+func TestEmptyData_MengandungVersiTerbaru(t *testing.T) {
+	// Arsitektur bagian 3: berkas belum ada dijawab bentuk kosong berisi
+	// versi skema yang sedang dipakai, yaitu versi terbaru.
 	payload := emptyData()
 	var parsed map[string]any
 	if err := json.Unmarshal(payload, &parsed); err != nil {
 		t.Fatalf("bentuk kosong harus JSON sah: %v", err)
 	}
-	if parsed["version"] != float64(1) {
-		t.Fatalf("version bentuk kosong harus 1, dapat %v", parsed["version"])
+	if parsed["version"] != float64(supportedVersion) {
+		t.Fatalf("version bentuk kosong harus %d, dapat %v", supportedVersion, parsed["version"])
 	}
 	for _, field := range []string{"items", "todo", "logs"} {
 		v, ok := parsed[field].([]any)

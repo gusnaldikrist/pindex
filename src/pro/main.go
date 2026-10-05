@@ -27,9 +27,23 @@ import (
 const (
 	dataFileName = "data.json"
 	serverAddr   = "localhost:8080"
-	// Satu-satunya versi skema yang dikenal di V1 (prd-skema.md bagian pembuka)
-	supportedVersion = 1
+	// supportedVersion adalah versi skema yang ditulis untuk berkas baru.
+	// versiDiterima adalah semua versi yang boleh muncul di berkas data.
+	//
+	// Field links pada entri todo dibuat opsional, jadi data versi 1 tetap
+	// sah tanpa perubahan apa pun: tidak ada migrasi yang harus dijalankan.
+	supportedVersion = 2
 )
+
+// versiDiterima adalah semua versi skema yang boleh muncul di berkas data.
+//
+// Angkanya ditulis literal, bukan dihitung dari supportedVersion, supaya
+// daftar ini bisa dibaca dan dibandingkan apa adanya oleh pengujian frontend
+// yang parses berkas ini. TestValidatePayload_MenerimaVersiLamaDanBaru
+// menjaga agar supportedVersion tidak pernah keluar dari daftar.
+func versiDiterima() []float64 {
+	return []float64{1, 2}
+}
 
 // validatePayload menolak apa pun yang bukan bentuk data Penanda.
 // Bentuk yang diterima sengaja sama persis dengan validateImportedData di
@@ -57,8 +71,8 @@ func validatePayload(raw []byte) error {
 	// Perbandingan dilakukan pada nilai float apa adanya, bukan int(), supaya
 	// version 1.5 tidak ikut diterima karena terpotong jadi 1. Frontend memakai
 	// perbandingan ketat juga, jadi keduanya menerima berkas yang sama.
-	if versionNumber != supportedVersion {
-		return fmt.Errorf("version %v tidak dikenal; hanya version %d yang dipakai", versionNumber, supportedVersion)
+	if !versiDikenal(versionNumber) {
+		return fmt.Errorf("version %v tidak dikenal; yang dipakai hanya %s", versionNumber, strings.Join(daftarVersiTeks(), " dan "))
 	}
 
 	for _, field := range []string{"items", "todo", "logs"} {
@@ -84,6 +98,76 @@ func validatePayload(raw []byte) error {
 		}
 	}
 
+	// Field links opsional pada todo diperiksa di sini, bukan cuma bentuknya
+	// di frontend. Backend adalah gerbang terakhir, jadi berkas yang salah
+	// bentuk harus ditolak walau dikirim dari luar aplikasi.
+	for indeks, entry := range parsed["todo"].([]any) {
+		todo, isObject := entry.(map[string]any)
+		if !isObject {
+			return fmt.Errorf("entri todo pada indeks %d bukan objek", indeks)
+		}
+		if err := validTodoLinks(todo["links"]); err != nil {
+			return fmt.Errorf("field links pada todo indeks %d: %w", indeks, err)
+		}
+	}
+
+	return nil
+}
+
+// versiDikenal menerima hanya versi yang ada di daftar.
+//
+// Perbandingan memakai nilai float apa adanya, bukan int(), supaya version
+// 1.5 tidak ikut diterima karena terpotong jadi 1. Frontend memakai
+// perbandingan ketat juga, jadi keduanya menerima berkas yang sama.
+func versiDikenal(version float64) bool {
+	for _, dikenal := range versiDiterima() {
+		if version == dikenal {
+			return true
+		}
+	}
+	return false
+}
+
+func daftarVersiTeks() []string {
+	daftar := make([]string, 0, 2)
+	for _, versi := range versiDiterima() {
+		daftar = append(daftar, fmt.Sprintf("version %g", versi))
+	}
+	return daftar
+}
+
+// validTodoLinks memeriksa field links opsional pada satu entri todo.
+//
+// Field ini boleh tidak ada sama sekali, dan boleh berupa array kosong: todo
+// tanpa tautan harus tetap sah supaya berkas lama tidak perlu diubah. Yang
+// ditolak hanya bentuk yang salah - array yang isinya bukan objek, atau url
+// yang kosong - supaya berkas yang diterima backend sama persis dengan yang
+// diterima frontend.
+func validTodoLinks(value any) error {
+	if value == nil {
+		return nil
+	}
+	daftar, isArray := value.([]any)
+	if !isArray {
+		return errors.New("harus berupa array")
+	}
+	for indeks, entry := range daftar {
+		link, isObject := entry.(map[string]any)
+		if !isObject {
+			return fmt.Errorf("elemen indeks %d bukan objek", indeks)
+		}
+		raw, ada := link["url"]
+		if !ada {
+			return fmt.Errorf("elemen indeks %d tidak punya url", indeks)
+		}
+		url, isString := raw.(string)
+		if !isString {
+			return fmt.Errorf("url pada elemen indeks %d bukan teks", indeks)
+		}
+		if strings.TrimSpace(url) == "" {
+			return fmt.Errorf("url pada elemen indeks %d kosong", indeks)
+		}
+	}
 	return nil
 }
 
