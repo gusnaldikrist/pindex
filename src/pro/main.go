@@ -19,14 +19,17 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf16"
 )
 
 const (
-	dataFileName = "data.json"
-	serverAddr   = "localhost:8080"
+	dataFileName    = "data.json"
+	defaultHost     = "localhost"
+	defaultPort     = 8080
+	maxFallbackPort = 8089
 	// supportedVersion adalah versi skema yang ditulis untuk berkas baru.
 	// versiDiterima adalah semua versi yang boleh muncul di berkas data.
 	//
@@ -573,16 +576,52 @@ func readAllLimited(r *http.Request) ([]byte, error) {
 	return body, nil
 }
 
+// listenWithFallback mencoba mengikat listener TCP mulai dari startPort hingga
+// endPort. Jika startPort sedang dipakai aplikasi lain, ia otomatis mencoba
+// port berikutnya hingga menemukan port yang kosong.
+func listenWithFallback(host string, startPort, endPort int) (net.Listener, int, error) {
+	if startPort > endPort {
+		return nil, 0, fmt.Errorf("rentang port tidak sah: %d > %d", startPort, endPort)
+	}
+	var lastErr error
+	for port := startPort; port <= endPort; port++ {
+		addr := net.JoinHostPort(host, strconv.Itoa(port))
+		listener, err := net.Listen("tcp", addr)
+		if err == nil {
+			return listener, port, nil
+		}
+		lastErr = err
+	}
+	return nil, 0, fmt.Errorf("seluruh port %d-%d sedang dipakai: %w", startPort, endPort, lastErr)
+}
+
+// promptExit menampilkan pesan panduan ke user dan menunggu tombol Enter
+// sebelum aplikasi keluar. Ini mencegah jendela terminal Windows langsung
+// menutup dalam sekejap ketika aplikasi dijalankan via double-click di Explorer.
+func promptExit(message string) {
+	if message != "" {
+		fmt.Println(message)
+	}
+	fmt.Println("Tekan Enter untuk keluar...")
+	buf := make([]byte, 1)
+	_, _ = os.Stdin.Read(buf)
+	os.Exit(1)
+}
+
 func main() {
 	baseDir := binaryDir()
 
-	listener, err := net.Listen("tcp", serverAddr)
+	listener, port, err := listenWithFallback(defaultHost, defaultPort, maxFallbackPort)
 	if err != nil {
-		fmt.Printf("Port %s sedang dipakai. Tutup aplikasi lain yang memakai port itu, lalu jalankan pindex.exe lagi.\n", serverAddr)
-		os.Exit(1)
+		fmt.Printf("Gagal memulai server: %v\n", err)
+		promptExit("Tutup aplikasi lain yang memakai port tersebut, lalu jalankan pindex.exe lagi.")
+		return
 	}
 
-	url := "http://" + serverAddr
+	url := fmt.Sprintf("http://%s:%d", defaultHost, port)
+	if port != defaultPort {
+		fmt.Printf("Port %d sedang dipakai aplikasi lain. PINDEX beralih ke port %d.\n", defaultPort, port)
+	}
 	fmt.Printf("PINDEX siap. Buka %s di browser.\n", url)
 	fmt.Printf("Data disimpan di %s\n", filepath.Join(baseDir, dataFileName))
 

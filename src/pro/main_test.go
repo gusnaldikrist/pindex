@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -597,3 +598,64 @@ func TestHanyaFieldSkemaYangDiwajibkan(t *testing.T) {
 		t.Fatal("berkas tanpa items harus ditolak")
 	}
 }
+
+func TestListenWithFallback_PicksStartPortWhenAvailable(t *testing.T) {
+	probe, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("gagal probe port bebas: %v", err)
+	}
+	port := probe.Addr().(*net.TCPAddr).Port
+	probe.Close()
+
+	listener, gotPort, err := listenWithFallback("localhost", port, port+2)
+	if err != nil {
+		t.Fatalf("seharusnya berhasil bind pada port yang tersedia, dapat: %v", err)
+	}
+	defer listener.Close()
+
+	if gotPort != port {
+		t.Fatalf("diharapkan port %d, dapat %d", port, gotPort)
+	}
+}
+
+func TestListenWithFallback_FallsBackWhenStartPortOccupied(t *testing.T) {
+	probe, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("gagal probe port bebas: %v", err)
+	}
+	port := probe.Addr().(*net.TCPAddr).Port
+	defer probe.Close()
+
+	listener, gotPort, err := listenWithFallback("localhost", port, port+5)
+	if err != nil {
+		t.Fatalf("seharusnya berhasil fallback ke port berikutnya, dapat: %v", err)
+	}
+	defer listener.Close()
+
+	if gotPort <= port {
+		t.Fatalf("port yang didapat harus lebih besar dari port yang diblokir (%d), dapat %d", port, gotPort)
+	}
+}
+
+func TestListenWithFallback_FailsWhenAllPortsOccupied(t *testing.T) {
+	probe, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("gagal probe port: %v", err)
+	}
+	defer probe.Close()
+	p := probe.Addr().(*net.TCPAddr).Port
+
+	listener, gotPort, err := listenWithFallback("localhost", p, p)
+	if err == nil {
+		listener.Close()
+		t.Fatalf("seharusnya gagal saat seluruh port terpakai, tetapi berhasil di port %d", gotPort)
+	}
+}
+
+func TestListenWithFallback_MenolakRentangTidakSah(t *testing.T) {
+	_, _, err := listenWithFallback("localhost", 8090, 8080)
+	if err == nil {
+		t.Fatal("rentang startPort > endPort harus ditolak")
+	}
+}
+
