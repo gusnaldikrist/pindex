@@ -26,10 +26,11 @@ import (
 )
 
 const (
-	dataFileName    = "data.json"
-	defaultHost     = "localhost"
-	defaultPort     = 8080
-	maxFallbackPort = 8089
+	dataFileName       = "data.json"
+	defaultBindHost    = "127.0.0.1"
+	defaultDisplayHost = "localhost"
+	defaultPort        = 8080
+	maxFallbackPort    = 8089
 	// supportedVersion adalah versi skema yang ditulis untuk berkas baru.
 	// versiDiterima adalah semua versi yang boleh muncul di berkas data.
 	//
@@ -580,19 +581,32 @@ func readAllLimited(r *http.Request) ([]byte, error) {
 // endPort. Jika startPort sedang dipakai aplikasi lain, ia otomatis mencoba
 // port berikutnya hingga menemukan port yang kosong.
 func listenWithFallback(host string, startPort, endPort int) (net.Listener, int, error) {
-	if startPort > endPort {
-		return nil, 0, fmt.Errorf("rentang port tidak sah: %d > %d", startPort, endPort)
+	if startPort < 1 || endPort > 65535 || startPort > endPort {
+		return nil, 0, fmt.Errorf("rentang port tidak sah: %d - %d (harus 1-65535)", startPort, endPort)
 	}
 	var lastErr error
 	for port := startPort; port <= endPort; port++ {
 		addr := net.JoinHostPort(host, strconv.Itoa(port))
 		listener, err := net.Listen("tcp", addr)
 		if err == nil {
-			return listener, port, nil
+			actualPort := listener.Addr().(*net.TCPAddr).Port
+			return listener, actualPort, nil
 		}
 		lastErr = err
 	}
-	return nil, 0, fmt.Errorf("seluruh port %d-%d sedang dipakai: %w", startPort, endPort, lastErr)
+	return nil, 0, fmt.Errorf("gagal mengikat listener pada rentang port %d-%d: %w", startPort, endPort, lastErr)
+}
+
+// waitForEnter menunggu input Enter dari pengguna sebelum proses ditutup.
+// Menerima Reader dan Writer terpisah agar perilakunya dapat diuji di unit test.
+func waitForEnter(r io.Reader, w io.Writer) {
+	if w != nil {
+		fmt.Fprintln(w, "Tekan Enter untuk keluar...")
+	}
+	if r != nil {
+		buf := make([]byte, 1)
+		_, _ = r.Read(buf)
+	}
 }
 
 // promptExit menampilkan pesan panduan ke user dan menunggu tombol Enter
@@ -602,23 +616,20 @@ func promptExit(message string) {
 	if message != "" {
 		fmt.Println(message)
 	}
-	fmt.Println("Tekan Enter untuk keluar...")
-	buf := make([]byte, 1)
-	_, _ = os.Stdin.Read(buf)
+	waitForEnter(os.Stdin, os.Stdout)
 	os.Exit(1)
 }
 
 func main() {
 	baseDir := binaryDir()
 
-	listener, port, err := listenWithFallback(defaultHost, defaultPort, maxFallbackPort)
+	listener, port, err := listenWithFallback(defaultBindHost, defaultPort, maxFallbackPort)
 	if err != nil {
 		fmt.Printf("Gagal memulai server: %v\n", err)
 		promptExit("Tutup aplikasi lain yang memakai port tersebut, lalu jalankan pindex.exe lagi.")
-		return
 	}
 
-	url := fmt.Sprintf("http://%s:%d", defaultHost, port)
+	url := fmt.Sprintf("http://%s:%d", defaultDisplayHost, port)
 	if port != defaultPort {
 		fmt.Printf("Port %d sedang dipakai aplikasi lain. PINDEX beralih ke port %d.\n", defaultPort, port)
 	}
@@ -630,8 +641,7 @@ func main() {
 	}
 
 	if err := http.Serve(listener, newHandler(baseDir)); err != nil {
-		fmt.Printf("Server berhenti: %v\n", err)
-		os.Exit(1)
+		promptExit(fmt.Sprintf("Server berhenti: %v", err))
 	}
 }
 

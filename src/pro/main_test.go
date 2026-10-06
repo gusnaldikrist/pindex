@@ -619,14 +619,18 @@ func TestListenWithFallback_PicksStartPortWhenAvailable(t *testing.T) {
 }
 
 func TestListenWithFallback_FallsBackWhenStartPortOccupied(t *testing.T) {
-	probe, err := net.Listen("tcp", "localhost:0")
+	probe, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("gagal probe port bebas: %v", err)
 	}
 	port := probe.Addr().(*net.TCPAddr).Port
 	defer probe.Close()
 
-	listener, gotPort, err := listenWithFallback("localhost", port, port+5)
+	if port > 65530 {
+		t.Skip("port ephemeral terlalu dekat batas atas 65535")
+	}
+
+	listener, gotPort, err := listenWithFallback("127.0.0.1", port, port+5)
 	if err != nil {
 		t.Fatalf("seharusnya berhasil fallback ke port berikutnya, dapat: %v", err)
 	}
@@ -638,14 +642,14 @@ func TestListenWithFallback_FallsBackWhenStartPortOccupied(t *testing.T) {
 }
 
 func TestListenWithFallback_FailsWhenAllPortsOccupied(t *testing.T) {
-	probe, err := net.Listen("tcp", "localhost:0")
+	probe, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("gagal probe port: %v", err)
 	}
 	defer probe.Close()
 	p := probe.Addr().(*net.TCPAddr).Port
 
-	listener, gotPort, err := listenWithFallback("localhost", p, p)
+	listener, gotPort, err := listenWithFallback("127.0.0.1", p, p)
 	if err == nil {
 		listener.Close()
 		t.Fatalf("seharusnya gagal saat seluruh port terpakai, tetapi berhasil di port %d", gotPort)
@@ -653,9 +657,40 @@ func TestListenWithFallback_FailsWhenAllPortsOccupied(t *testing.T) {
 }
 
 func TestListenWithFallback_MenolakRentangTidakSah(t *testing.T) {
-	_, _, err := listenWithFallback("localhost", 8090, 8080)
-	if err == nil {
-		t.Fatal("rentang startPort > endPort harus ditolak")
+	for _, tc := range []struct {
+		start, end int
+	}{
+		{8090, 8080},
+		{0, 8080},
+		{-1, 8080},
+		{8080, 70000},
+	} {
+		_, _, err := listenWithFallback("127.0.0.1", tc.start, tc.end)
+		if err == nil {
+			t.Fatalf("rentang %d-%d harus ditolak", tc.start, tc.end)
+		}
+	}
+}
+
+func TestWaitForEnter_MembacaInputDanMenulisPesan(t *testing.T) {
+	input := strings.NewReader("\n")
+	var output strings.Builder
+
+	waitForEnter(input, &output)
+
+	if !strings.Contains(output.String(), "Tekan Enter untuk keluar...") {
+		t.Fatalf("pesan prompt harus memuat petunjuk Enter, dapat: %s", output.String())
+	}
+}
+
+func TestWaitForEnter_MenanganiEOF(t *testing.T) {
+	emptyInput := strings.NewReader("")
+	var output strings.Builder
+
+	waitForEnter(emptyInput, &output)
+
+	if !strings.Contains(output.String(), "Tekan Enter untuk keluar...") {
+		t.Fatalf("pesan prompt harus memuat petunjuk Enter, dapat: %s", output.String())
 	}
 }
 
