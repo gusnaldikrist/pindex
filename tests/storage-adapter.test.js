@@ -97,20 +97,20 @@ test('Tiket 11 - Path lokal: alamat web tidak tertukar dengan path lokal', () =>
 test('Area status tiga bagian dipisah tanda hubung', () => {
   const adapter = loadAdapter();
 
-  assert.equal(adapter.formatStatus(24, '16:02'), 'Penanda - 24 item - tersimpan 16:02');
+  assert.equal(adapter.formatStatus(24, '16:02'), 'PINDEX - 24 item - tersimpan 16:02');
 });
 
 test('Area status: kata memuat hanya saat membaca berkas, jam belum ada', () => {
   const adapter = loadAdapter();
 
-  assert.equal(adapter.formatStatus(0, null, true), 'Penanda - 0 item - memuat');
+  assert.equal(adapter.formatStatus(0, null, true), 'PINDEX - 0 item - memuat');
   // Setelah simpan sukses, jam muncul dan kata memuat hilang
-  assert.equal(adapter.formatStatus(24, '16:02', false), 'Penanda - 24 item - tersimpan 16:02');
+  assert.equal(adapter.formatStatus(24, '16:02', false), 'PINDEX - 24 item - tersimpan 16:02');
 });
 
 test('Area status tanpa jam simpan hanya dua bagian', () => {
   const adapter = loadAdapter();
-  assert.equal(adapter.formatStatus(4, null), 'Penanda - 4 item');
+  assert.equal(adapter.formatStatus(4, null), 'PINDEX - 4 item');
 });
 
 test('Tiket 11 - Jam simpan memakai format 24 jam dua digit', () => {

@@ -113,7 +113,7 @@ test('app.js: loadData() bentuk kosong awal dan render empty state', async () =>
   const env = createStorageEnvironment();
   await env.settle();
 
-  assert.match(env.getStatusText(), /Penanda - 0 item/, 'Status awal harus menunjukkan Penanda - 0 item');
+  assert.match(env.getStatusText(), /PINDEX - 0 item/, 'Status awal harus menunjukkan PINDEX - 0 item');
   assert.match(env.getPanelHtml(), /Belum ada item kerja/, 'Empty state harus tampil saat data kosong');
   assert.match(env.getPanelHtml(), /\+ Tambah Item/, 'Tombol Tambah Item ada di empty state');
   assert.match(env.getPanelHtml(), /Import JSON/, 'Tombol Import JSON ada di empty state');
@@ -138,7 +138,7 @@ test('app.js: saveData() dan loadData() siklus baca tulis lewat backend', async 
 
   assert.match(
     env.getStatusText(),
-    /Penanda - 4 item - tersimpan \d{2}:\d{2}/,
+    /PINDEX - 4 item - tersimpan \d{2}:\d{2}/,
     'Status bar harus diperbarui dengan jam simpan'
   );
   assert.match(env.getPanelHtml(), /search-input/, 'Panel indeks harus menampilkan kotak pencarian setelah data tersimpan');

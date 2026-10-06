@@ -1,12 +1,12 @@
 # build.ps1 - Sinkronkan paket rilis dist/v1/ dengan sumber.
 #
-# Masalah yang diselesaikan: penanda.exe menyajikan frontend dari folder
+# Masalah yang diselesaikan: pindex.exe menyajikan frontend dari folder
 # binary-nya sendiri (lihat binaryDir() di src/pro/main.go). Jadi berkas
 # yang dilihat user adalah dist/v1/, bukan src/frontend/. Kalau salinan
 # lupa, design baru di src/frontend/ tidak akan pernah terlihat.
 #
 # Pemakaian:
-#   .\build.ps1              Bangun penanda.exe lalu salin frontend
+#   .\build.ps1              Bangun pindex.exe lalu salin frontend
 #   .\build.ps1 -CheckOnly   Hanya cek, jangan ubah apa pun (keluar 1 kalau ada yang beda)
 #   .\build.ps1 -NoExe       Lewati go build, tetap salin frontend
 #
@@ -33,6 +33,8 @@ $berkas = @(
   @{ Nama = 'search.js'; Sumber = (Join-Path $srcFrontend 'search.js') }
   @{ Nama = 'storage-adapter.js'; Sumber = (Join-Path $srcFrontend 'storage-adapter.js') }
   @{ Nama = 'style.css'; Sumber = (Join-Path $srcFrontend 'style.css') }
+  @{ Nama = 'favicon.png'; Sumber = (Join-Path $srcFrontend 'favicon.png') }
+  @{ Nama = 'assets/si-pita-brand.png'; Sumber = (Join-Path $srcFrontend 'assets/si-pita-brand.png') }
   @{ Nama = 'data.example.json'; Sumber = (Join-Path $srcShared 'data.example.json') }
 )
 
@@ -83,17 +85,17 @@ if ($CheckOnly) {
   exit 1
 }
 
-# --- 4. Bangun penanda.exe ----------------------------------------------------
+# --- 4. Bangun pindex.exe ----------------------------------------------------
 if (-not $NoExe) {
-  $exe = Join-Path $dist 'penanda.exe'
-  Write-Host "Membangun penanda.exe..." -ForegroundColor Cyan
+  $exe = Join-Path $dist 'pindex.exe'
+  Write-Host "Membangun pindex.exe..." -ForegroundColor Cyan
   & go build -o $exe ./src/pro
   if ($LASTEXITCODE -ne 0) {
     Write-Host "GAGAL: go build tidak berhasil." -ForegroundColor Red
     exit 1
   }
   $ukuran = [math]::Round((Get-Item $exe).Length / 1MB, 1)
-  Write-Host "  penanda.exe dibuat ($ukuran MB)" -ForegroundColor Gray
+  Write-Host "  pindex.exe dibuat ($ukuran MB)" -ForegroundColor Gray
 }
 
 # --- 5. Salin frontend ----------------------------------------------------------
@@ -101,6 +103,10 @@ $disalin = @()
 foreach ($b in $berkas) {
   $tujuan = Join-Path $dist $b.Nama
   if ($beda -contains $b.Nama) {
+    $parentDir = Split-Path -Parent $tujuan
+    if (-not (Test-Path $parentDir)) {
+      New-Item -ItemType Directory -Path $parentDir -Force | Out-Null
+    }
     Copy-Item -Path $b.Sumber -Destination $tujuan -Force
     $disalin += $b.Nama
   }

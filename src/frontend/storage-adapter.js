@@ -64,7 +64,7 @@
   // Format area status: nama aplikasi, jumlah item, waktu simpan.
   // Tidak ada lagi nama jalur karena aplikasi hanya punya satu cara jalan.
   function formatStatus(itemCount, savedAt, isLoading) {
-    const parts = ['Penanda - ' + itemCount + ' item'];
+    const parts = ['PINDEX - ' + itemCount + ' item'];
     if (isLoading) {
       parts.push('memuat');
     } else if (savedAt) {
@@ -157,10 +157,12 @@
 
   if (typeof window !== 'undefined') {
     window.PenandaStorage = api;
+    window.PindexStorage = api;
   }
 
   if (typeof globalThis !== 'undefined') {
     globalThis.PenandaStorage = api;
+    globalThis.PindexStorage = api;
   }
 
   if (typeof module !== 'undefined' && module.exports) {

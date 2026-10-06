@@ -3,6 +3,8 @@
 *.exe~
 penanda
 penanda.exe
+pindex
+pindex.exe
 
 # Runtime Data (Data lokal & backup harian pengguna)
 # Mencegah data riil link/dokumen pengguna ter-commit ke repo
@@ -19,8 +21,8 @@ dist/
 build/
 
 # Paket rilis V1 ikut di-track supaya bisa diunduh langsung dari GitHub.
-# penanda.exe tetap diabaikan: 9,7 MB artefak build, dibangun sendiri
-# dengan `go build -o dist/v1/penanda.exe ./src/pro`.
+# pindex.exe tetap diabaikan: 9,8 MB artefak build, dibangun sendiri
+# dengan `go build -o dist/v1/pindex.exe ./src/pro`.
 !dist/
 !dist/*.txt
 !dist/v1/
@@ -29,6 +31,18 @@ build/
 !dist/v1/*.css
 !dist/v1/*.txt
 !dist/v1/data.example.json
+!dist/v1/favicon.png
+!dist/v1/assets/
+
+# AI Agent & Internal Development Scaffolding
+.agents/
+.impeccable/
+.scratch/
+.pi/
+.tmp-commit/
+AGENTS.md
+PRODUCT.md
+biome.json
 
 # OS & Editor
 Thumbs.db

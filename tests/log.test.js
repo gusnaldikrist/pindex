@@ -511,8 +511,8 @@ test('Tiket 08 - Area status tetap tiga bagian, tidak menambah penghitung entri 
   const statusBar = env.getOrCreateElement('status-bar');
   assert.equal(
     statusBar.textContent,
-    'Penanda - 4 item',
-    'Area status tetap "Penanda - X item" tanpa penghitung entri log'
+    'PINDEX - 4 item',
+    'Area status tetap "PINDEX - X item" tanpa penghitung entri log'
   );
   assert.ok(!/entri/i.test(statusBar.textContent), 'Area status tidak boleh memuat kata "entri"');
 });

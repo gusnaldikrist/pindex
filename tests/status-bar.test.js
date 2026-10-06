@@ -174,7 +174,7 @@ test('area status tidak pernah menyebut Lite atau Pro', async () => {
   const env = createTestEnvironment();
   await env.settle();
 
-  assert.match(env.getStatusText(), /^Penanda - 0 item/);
+  assert.match(env.getStatusText(), /^PINDEX - 0 item/);
   assert.doesNotMatch(env.getStatusText(), /\bLite\b|\bPro\b/,
     'Area status tidak boleh menyebut nama jalur');
 });
@@ -193,7 +193,7 @@ test('data dibaca dari backend, bukan dari localStorage', async () => {
   await env.settle();
 
   assert.equal(env.state.data.items.length, 4, 'Data harus dibaca dari backend');
-  assert.match(env.getStatusText(), /^Penanda - 4 item/, 'Area status menyebut jumlah item');
+  assert.match(env.getStatusText(), /^PINDEX - 4 item/, 'Area status menyebut jumlah item');
 });
 
 test('penyimpanan lewat POST /api/data, bukan localStorage', async () => {
@@ -213,7 +213,7 @@ test('penyimpanan lewat POST /api/data, bukan localStorage', async () => {
   assert.equal(postCalls.length, 1, 'Harus satu permintaan POST ke backend');
   assert.equal(postCalls[0].url, '/api/data');
   assert.match(postCalls[0].body, new RegExp(`"version":${exampleData.version}`), 'Badan POST berisi seluruh isi berkas');
-  assert.match(env.getStatusText(), /Penanda - 4 item - tersimpan \d{2}:\d{2}/,
+  assert.match(env.getStatusText(), /PINDEX - 4 item - tersimpan \d{2}:\d{2}/,
     'Status menampilkan jam simpan');
 });
 
@@ -252,8 +252,8 @@ test('backend mati: pesan menyebut cara menjalankan yang benar', async () => {
   });
   await env.settle();
 
-  assert.match(env.getStatusText(), /penanda\.exe/,
-    'Halaman tanpa server harus diarahkan ke penanda.exe');
+  assert.match(env.getStatusText(), /pindex\.exe/,
+    'Halaman tanpa server harus diarahkan ke pindex.exe');
   assert.doesNotMatch(env.getStatusText(), /Failed to fetch/,
     'Galat teknis tidak boleh sampai ke user');
 });
@@ -263,7 +263,7 @@ test('backend menjawab galat saat baca: kegagalan harus terlihat', async () => {
   await env.settle();
 
   assert.equal(env.getStatusClass(), 'status-bar error', 'Status harus ditandai galat');
-  assert.match(env.getStatusText(), /penanda\.exe/,
+  assert.match(env.getStatusText(), /pindex\.exe/,
     'User harus diberi tahu apa yang harus dilakukan');
 });
 
@@ -326,7 +326,7 @@ test('status bar memuat tiga bagian dipisah tanda hubung', async () => {
   const text = env.getStatusText();
   const parts = text.split(' - ');
   assert.equal(parts.length, 3, `Status harus tiga bagian, dapat: "${text}"`);
-  assert.equal(parts[0], 'Penanda');
+  assert.equal(parts[0], 'PINDEX');
   assert.equal(parts[1], '4 item');
   assert.match(parts[2], /^tersimpan \d{2}:\d{2}$/, 'Bagian ketiga harus waktu simpan');
 });

@@ -9,7 +9,7 @@ function kosong() {
 }
 
 /**
- * Buat fetch yang berperilaku seperti penanda.exe.
+ * Buat fetch yang berperilaku seperti pindex.exe.
  *
  * Data disimpan di objek store mil.pemanggil, di kunci yang sama dengan
  * yang dulu dipakai localStorage. Ini disengaja: assertion test yang sudah

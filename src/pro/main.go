@@ -578,12 +578,12 @@ func main() {
 
 	listener, err := net.Listen("tcp", serverAddr)
 	if err != nil {
-		fmt.Printf("Port %s sedang dipakai. Tutup aplikasi lain yang memakai port itu, lalu jalankan penanda.exe lagi.\n", serverAddr)
+		fmt.Printf("Port %s sedang dipakai. Tutup aplikasi lain yang memakai port itu, lalu jalankan pindex.exe lagi.\n", serverAddr)
 		os.Exit(1)
 	}
 
 	url := "http://" + serverAddr
-	fmt.Printf("Penanda siap. Buka %s di browser.\n", url)
+	fmt.Printf("PINDEX siap. Buka %s di browser.\n", url)
 	fmt.Printf("Data disimpan di %s\n", filepath.Join(baseDir, dataFileName))
 
 	if err := openBrowser(url); err != nil {

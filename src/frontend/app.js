@@ -23,7 +23,7 @@
   //
   // Tidak ada fallback localStorage di sini. Kalau ada, data user bisa
   // diam-diam terpecah di dua tempat: satu di browser, satu di data.json.
-  const NO_SERVER_MESSAGE = 'Aplikasi ini berjalan lewat penanda.exe. Tutup halaman ini, lalu jalankan penanda.exe.';
+  const NO_SERVER_MESSAGE = 'Aplikasi ini berjalan lewat pindex.exe. Tutup halaman ini, lalu jalankan pindex.exe.';
 
   // Versi skema yang dikenali. supportedVersion adalah versi yang ditulis
   // untuk data baru, VERSI_DITERIMA adalah semua versi yang boleh dibaca.
@@ -1433,8 +1433,12 @@ function getPrimaryLinkInfo(item) {
     const items = (state.data && Array.isArray(state.data.items)) ? state.data.items : [];
 
     if (items.length === 0) {
+      // ast-grep-ignore: no-inner-html-js
       container.innerHTML = `
         <div class="empty-state">
+          <div class="empty-state-mascot">
+            <img src="assets/si-pita-brand.png" alt="Si Pita" class="empty-state-mascot-img" width="64" height="64">
+          </div>
           <div class="empty-state-title">Belum ada item kerja</div>
           <p class="empty-state-desc">Tambahkan akses dokumen pertama Anda atau muat dari berkas cadangan.</p>
           <div class="empty-state-actions">
@@ -1772,8 +1776,11 @@ function deadlineHariKe(deadline, todayString) {
       }
       // ast-grep-ignore: no-inner-html-js
       todoListContainer.innerHTML = `
-        <div class="result-empty" style="padding: 24px 0; text-align: center; color: var(--muted); font-size: var(--font-small);">
-          ${emptyMessage}
+        <div class="result-empty empty-state-card">
+          <div class="empty-state-mascot-sm">
+            <img src="assets/si-pita-brand.png" alt="Si Pita" class="empty-state-mascot-img-sm" width="44" height="44">
+          </div>
+          <div class="empty-state-text">${emptyMessage}</div>
         </div>
       `;
     } else {
@@ -2210,8 +2217,11 @@ async function confirmDestructive(config) {
         : 'Belum ada logbook. Catat aktivitas kerja harian Anda.';
       // ast-grep-ignore: no-inner-html-js
       logListContainer.innerHTML = `
-        <div class="result-empty" style="padding: 24px 0; text-align: center; color: var(--muted); font-size: var(--font-small);">
-          ${emptyMessage}
+        <div class="result-empty empty-state-card">
+          <div class="empty-state-mascot-sm">
+            <img src="assets/si-pita-brand.png" alt="Si Pita" class="empty-state-mascot-img-sm" width="44" height="44">
+          </div>
+          <div class="empty-state-text">${emptyMessage}</div>
         </div>
       `;
       return;
@@ -2513,7 +2523,7 @@ async function confirmDestructive(config) {
   function unduhContohData() {
     const link = document.createElement('a');
     link.href = 'data.example.json';
-    link.download = 'penanda-contoh.json';
+    link.download = 'pindex-contoh.json';
     document.body.appendChild(link);
     link.click();
     if (link.parentNode) {
@@ -2558,7 +2568,7 @@ async function confirmDestructive(config) {
   }
 
   // ==========================================================================
-  // Ekspor Logbook ke CSV (riset: docs/export-logbook-research.md)
+  // Ekspor Logbook ke CSV
   // ==========================================================================
   // Dua aturan di bawah bukan pilihan gaya; keduanya mencegah berkas yang
   // rusak dibuka orang tanpa disadarinya.
@@ -2627,7 +2637,7 @@ async function confirmDestructive(config) {
   // Bentuk berkas yang sama dengan yang diterima backend (arsitektur bagian 5)
   function validateImportedData(parsed) {
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return { valid: false, error: 'Berkas ditolak: isinya bukan objek data Penanda' };
+      return { valid: false, error: 'Berkas ditolak: isinya bukan objek data PINDEX' };
     }
     if (!VERSI_DITERIMA.includes(parsed.version)) {
       return {
@@ -2682,7 +2692,7 @@ async function confirmDestructive(config) {
         </div>
         <div class="modal-body">
           <div class="delete-warning">${escapeHtml(errorMessage)}</div>
-          <div class="form-hint">Berkas harus hasil tombol <strong>Cadangkan</strong> di Penanda. Kalau belum pernah punya cadangan, unduh dulu berkasnya lewat tombol <strong>Contoh</strong>, isi, lalu import.</div>
+          <div class="form-hint">Berkas harus hasil tombol <strong>Cadangkan</strong> di PINDEX. Kalau belum pernah punya cadangan, unduh dulu berkasnya lewat tombol <strong>Contoh</strong>, isi, lalu import.</div>
           <div class="form-hint">Data yang sudah ada tidak berubah.</div>
         </div>
         <div class="modal-footer">
@@ -2717,7 +2727,7 @@ async function confirmDestructive(config) {
     overlay.innerHTML = `
       <div class="modal-box" id="modal-import-confirm-box">
         <div class="modal-header">
-          <div class="modal-title">Impor Data Penanda</div>
+          <div class="modal-title">Impor Data PINDEX</div>
           <button type="button" class="btn-close" id="btn-close-import-confirm" aria-label="Tutup">&times;</button>
         </div>
         <div class="modal-body delete-confirm-box">

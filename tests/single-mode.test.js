@@ -153,7 +153,7 @@ const denganServer = async () => ({ ok: true, status: 200, text: async () => JSO
 
 // ---------------------------------------------------------------------------
 
-test('tanpa server, pesan menyebut penanda.exe', async () => {
+test('tanpa server, pesan menyebut pindex.exe', async () => {
   // Halaman yang dibuka langsung dari Explorer tidak punya server. Ini bukan
   // kondisi langka: orang bisa salah klik index.html. Pesannya harus memberi
   // tahu apa yang harus dilakukan, bukan menampilkan galat teknis.
@@ -161,7 +161,7 @@ test('tanpa server, pesan menyebut penanda.exe', async () => {
   await env.settle();
 
   const pesan = env.getStatusText();
-  assert.match(pesan, /penanda\.exe/,
+  assert.match(pesan, /pindex\.exe/,
     `pesan harus menyebut cara menjalankan yang benar, dapat: "${pesan}"`);
   assert.ok(!/undefined|Failed to fetch|\[object/i.test(pesan),
     `pesan tidak boleh menampilkan galat teknis, dapat: "${pesan}"`);
@@ -219,7 +219,7 @@ test('area status menyebut nama aplikasi, bukan nama jalur', async () => {
   await env.settle();
 
   const teks = env.getStatusText();
-  assert.ok(teks.includes('Penanda'),
+  assert.ok(teks.includes('PINDEX'),
     `area status harus menyebut nama aplikasi, dapat: "${teks}"`);
   assert.ok(!/\bLite\b/.test(teks),
     `tidak boleh lagi menyebut jalur Lite, dapat: "${teks}"`);
