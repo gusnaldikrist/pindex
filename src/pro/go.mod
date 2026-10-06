@@ -1,3 +1,3 @@
-module penanda
+module pindex
 
 go 1.22
