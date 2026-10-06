@@ -12,6 +12,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"net"
@@ -692,13 +693,54 @@ func promptExit(message string) {
 	os.Exit(1)
 }
 
+// parsePortFlag mem-parse argumen baris perintah untuk opsi -port.
+// Mengembalikan nomor port jika disetel (1-65535), 0 jika tidak disetel (pakai default),
+// atau error jika argumen tidak sah.
+func parsePortFlag(args []string) (int, error) {
+	fs := flag.NewFlagSet("pindex", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	var port int
+	portSet := false
+	fs.IntVar(&port, "port", 0, "Nomor port TCP yang diinginkan (default: 8080 dengan auto-fallback)")
+	if err := fs.Parse(args); err != nil {
+		return 0, err
+	}
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "port" {
+			portSet = true
+		}
+	})
+	if portSet && (port < 1 || port > 65535) {
+		return 0, fmt.Errorf("port %d tidak sah: harus antara 1 dan 65535", port)
+	}
+	return port, nil
+}
+
 func main() {
 	baseDir := binaryDir()
 
-	listener, port, alreadyRunning, err := listenOrFindRunning(defaultBindHost, defaultPort, maxFallbackPort)
+	portFlag, err := parsePortFlag(os.Args[1:])
 	if err != nil {
-		fmt.Printf("Gagal memulai server: %v\n", err)
-		promptExit("Tutup aplikasi lain yang memakai port tersebut, lalu jalankan pindex.exe lagi.")
+		fmt.Printf("Argumen baris perintah tidak sah: %v\n", err)
+		promptExit("Penggunaan: pindex.exe [-port <nomor 1-65535>]")
+	}
+
+	startPort := defaultPort
+	endPort := maxFallbackPort
+	if portFlag != 0 {
+		startPort = portFlag
+		endPort = portFlag
+	}
+
+	listener, port, alreadyRunning, err := listenOrFindRunning(defaultBindHost, startPort, endPort)
+	if err != nil {
+		if portFlag != 0 {
+			fmt.Printf("Gagal memulai server pada port %d: %v\n", portFlag, err)
+			promptExit("Pastikan port tersebut tidak sedang dipakai aplikasi lain.")
+		} else {
+			fmt.Printf("Gagal memulai server: %v\n", err)
+			promptExit("Tutup aplikasi lain yang memakai port tersebut, lalu jalankan pindex.exe lagi.")
+		}
 	}
 
 	url := fmt.Sprintf("http://%s:%d", defaultDisplayHost, port)
@@ -712,7 +754,7 @@ func main() {
 		return
 	}
 
-	if port != defaultPort {
+	if portFlag == 0 && port != defaultPort {
 		fmt.Printf("Port %d sedang dipakai aplikasi lain. PINDEX beralih ke port %d.\n", defaultPort, port)
 	}
 	fmt.Printf("PINDEX siap. Buka %s di browser.\n", url)

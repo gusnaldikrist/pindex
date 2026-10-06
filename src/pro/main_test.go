@@ -845,5 +845,59 @@ func TestListenOrFindRunning_PrioritaskanInstancePindexDiFallbackPort(t *testing
 	}
 }
 
+func TestParsePortFlag_DefaultKosong(t *testing.T) {
+	port, err := parsePortFlag([]string{})
+	if err != nil {
+		t.Fatalf("tanpa argumen harus menghasilkan nil error, dapat: %v", err)
+	}
+	if port != 0 {
+		t.Fatalf("tanpa argumen harus mengembalikan 0, dapat: %d", port)
+	}
+}
+
+func TestParsePortFlag_NomorPortSah(t *testing.T) {
+	for _, tc := range []struct {
+		arg  string
+		want int
+	}{
+		{"8080", 8080},
+		{"9000", 9000},
+		{"1", 1},
+		{"65535", 65535},
+	} {
+		port, err := parsePortFlag([]string{"-port", tc.arg})
+		if err != nil {
+			t.Fatalf("argumen -port %s seharusnya sah, dapat error: %v", tc.arg, err)
+		}
+		if port != tc.want {
+			t.Fatalf("diharapkan port %d, dapat %d", tc.want, port)
+		}
+	}
+}
+
+func TestParsePortFlag_MenolakPortDiLuarRentang(t *testing.T) {
+	for _, arg := range []string{"0", "-1", "65536", "70000"} {
+		_, err := parsePortFlag([]string{"-port", arg})
+		if err == nil {
+			t.Fatalf("port %s seharusnya ditolak", arg)
+		}
+	}
+}
+
+func TestParsePortFlag_MenolakBukanAngka(t *testing.T) {
+	_, err := parsePortFlag([]string{"-port", "abc"})
+	if err == nil {
+		t.Fatal("port bukan angka harus ditolak")
+	}
+}
+
+func TestParsePortFlag_MenolakFlagTidakDikenal(t *testing.T) {
+	_, err := parsePortFlag([]string{"-unknown"})
+	if err == nil {
+		t.Fatal("flag tidak dikenal harus ditolak")
+	}
+}
+
+
 
 

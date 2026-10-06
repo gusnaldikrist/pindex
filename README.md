@@ -14,7 +14,7 @@ PINDEX ditemani oleh **Si Pita** (*The Bookmark Ribbon Spirit*) — roh penanda 
 
 ## Arsitektur
 
-- **Single Binary**: Backend berbasis Go pustaka standar (stdlib saja) yang ringan dan mandiri, berjalan pada `localhost:8080`.
+- **Single Binary**: Backend berbasis Go pustaka standar (stdlib saja) yang ringan dan mandiri, mendengarkan pada `localhost:8080` (dilengkapi auto-fallback cerdas ke `8081`–`8089` jika port default sedang terpakai).
 - **Zero External Dependencies & Zero CDN**: Tanpa framework CSS/JS berat, tanpa Node.js di runtime, dan tanpa panggilan jaringan ke luar.
 - **100% Offline-First**: Disajikan sebagai Single Page Application (SPA) vanilla JS/CSS langsung dari direktori rilis lokal.
 - **Penyimpanan Lokal**: Seluruh data tersimpan dalam format berkas JSON lokal (`data.json`).
@@ -37,6 +37,9 @@ PINDEX ditemani oleh **Si Pita** (*The Bookmark Ribbon Spirit*) — roh penanda 
 5. **Backup Otomatis Harian**:
    - Setiap kali terjadi penyimpanan, sistem secara otomatis membuat salinan cadangan harian `data-YYYYMMDD.json` untuk mencegah kehilangan data.
    - Fitur Ekspor dan Impor data JSON mandiri.
+6. **Port Fallback & Single-Instance Guard**:
+   - Otomatis memindai port cadangan (8080–8089) jika port utama sedang digunakan aplikasi lain.
+   - Mendeteksi jika PINDEX sudah aktif di latar belakang dan langsung memfokuskan kembali browser ke tab PINDEX yang aktif tanpa membuat server ganda.
 
 ---
 
@@ -70,12 +73,13 @@ Hasil build akan ditempatkan di folder `dist/v1/` (`pindex.exe` beserta seluruh 
 1. Buka folder `dist/v1/`.
 2. Jalankan berkas aplikasi:
    ```powershell
+   # Jalankan normal (default: port 8080 dengan auto-fallback 8080-8089)
    .\dist\v1\pindex.exe
+
+   # Jalankan pada port tertentu (opsional)
+   .\dist\v1\pindex.exe -port 9000
    ```
-3. Buka browser web dan akses:
-   ```
-   http://localhost:8080
-   ```
+3. Browser web otomatis terbuka ke alamat server yang aktif (misal `http://localhost:8080` atau port fallback).
    *(Aplikasi siap digunakan secara penuh dan offline).*
 
 ---
