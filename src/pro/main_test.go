@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
+	"flag"
 	"io"
 	"net"
 	"net/http"
@@ -897,6 +899,47 @@ func TestParsePortFlag_MenolakFlagTidakDikenal(t *testing.T) {
 		t.Fatal("flag tidak dikenal harus ditolak")
 	}
 }
+
+func TestParsePortFlag_SintaksSamaDengan(t *testing.T) {
+	port, err := parsePortFlag([]string{"-port=8888"})
+	if err != nil {
+		t.Fatalf("sintaks -port=8888 harus sah, dapat: %v", err)
+	}
+	if port != 8888 {
+		t.Fatalf("diharapkan port 8888, dapat: %d", port)
+	}
+}
+
+func TestParsePortFlag_MenolakPortTanpaNilai(t *testing.T) {
+	_, err := parsePortFlag([]string{"-port"})
+	if err == nil {
+		t.Fatal("-port tanpa nilai harus ditolak")
+	}
+}
+
+func TestParsePortFlag_MenolakArgumenPosisional(t *testing.T) {
+	for _, args := range [][]string{
+		{"9000"},
+		{"port", "9000"},
+		{"typo", "-port", "9000"},
+		{"-port", "9000", "ekstra"},
+	} {
+		_, err := parsePortFlag(args)
+		if err == nil {
+			t.Fatalf("argumen posisional %v harus ditolak", args)
+		}
+	}
+}
+
+func TestParsePortFlag_MenanganiFlagHelp(t *testing.T) {
+	for _, arg := range []string{"-h", "-help", "--help"} {
+		_, err := parsePortFlag([]string{arg})
+		if !errors.Is(err, flag.ErrHelp) {
+			t.Fatalf("flag %s harus mengembalikan flag.ErrHelp, dapat: %v", arg, err)
+		}
+	}
+}
+
 
 
 

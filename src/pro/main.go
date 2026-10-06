@@ -661,6 +661,9 @@ func listenOrFindRunning(bindHost string, startPort, endPort int) (listener net.
 		}
 		lastErr = err
 	}
+	if startPort == endPort {
+		return nil, 0, false, fmt.Errorf("gagal mengikat listener pada port %d: %w", startPort, lastErr)
+	}
 	return nil, 0, false, fmt.Errorf("gagal mengikat listener pada rentang port %d-%d: %w", startPort, endPort, lastErr)
 }
 
@@ -705,6 +708,9 @@ func parsePortFlag(args []string) (int, error) {
 	if err := fs.Parse(args); err != nil {
 		return 0, err
 	}
+	if fs.NArg() > 0 {
+		return 0, fmt.Errorf("argumen tidak dikenal: %s", fs.Arg(0))
+	}
 	fs.Visit(func(f *flag.Flag) {
 		if f.Name == "port" {
 			portSet = true
@@ -721,6 +727,10 @@ func main() {
 
 	portFlag, err := parsePortFlag(os.Args[1:])
 	if err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			fmt.Println("Penggunaan: pindex.exe [-port <nomor 1-65535>]")
+			return
+		}
 		fmt.Printf("Argumen baris perintah tidak sah: %v\n", err)
 		promptExit("Penggunaan: pindex.exe [-port <nomor 1-65535>]")
 	}
