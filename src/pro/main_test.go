@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -693,4 +694,108 @@ func TestWaitForEnter_MenanganiEOF(t *testing.T) {
 		t.Fatalf("pesan prompt harus memuat petunjuk Enter, dapat: %s", output.String())
 	}
 }
+
+func TestPingEndpoint_MengembalikanIdentitasPindex(t *testing.T) {
+	handler := newHandler(newTestDir(t))
+	req := httptest.NewRequest(http.MethodGet, "/api/ping", nil)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("diharapkan status 200, dapat: %d", rec.Code)
+	}
+	if rec.Header().Get("X-App") != "pindex" {
+		t.Fatalf("diharapkan header X-App: pindex, dapat: %q", rec.Header().Get("X-App"))
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `"app":"pindex"`) {
+		t.Fatalf("body ping harus memuat identitas pindex, dapat: %s", body)
+	}
+}
+
+func TestPingEndpoint_MenolakMetodeBukanGET(t *testing.T) {
+	handler := newHandler(newTestDir(t))
+	req := httptest.NewRequest(http.MethodPost, "/api/ping", nil)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("metode POST harus ditolak dengan 405, dapat: %d", rec.Code)
+	}
+}
+
+func TestIsPindexRunning_MendeteksiServerPindex(t *testing.T) {
+	ts := httptest.NewServer(newHandler(newTestDir(t)))
+	defer ts.Close()
+
+	host, portStr, err := net.SplitHostPort(ts.Listener.Addr().String())
+	if err != nil {
+		t.Fatalf("gagal split host port: %v", err)
+	}
+	port, _ := strconv.Atoi(portStr)
+
+	if !isPindexRunning(host, port) {
+		t.Fatalf("isPindexRunning harus mengembalikan true untuk instance PINDEX yang berjalan di %s:%d", host, port)
+	}
+}
+
+func TestIsPindexRunning_MenolakServerAsing(t *testing.T) {
+	dummy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("Hello from other app"))
+	}))
+	defer dummy.Close()
+
+	host, portStr, err := net.SplitHostPort(dummy.Listener.Addr().String())
+	if err != nil {
+		t.Fatalf("gagal split host port: %v", err)
+	}
+	port, _ := strconv.Atoi(portStr)
+
+	if isPindexRunning(host, port) {
+		t.Fatalf("isPindexRunning harus mengembalikan false untuk server asing")
+	}
+}
+
+func TestIsPindexRunning_PortTertutup(t *testing.T) {
+	probe, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("gagal probe port: %v", err)
+	}
+	p := probe.Addr().(*net.TCPAddr).Port
+	probe.Close()
+
+	if isPindexRunning("127.0.0.1", p) {
+		t.Fatalf("isPindexRunning harus mengembalikan false jika port tidak ada yang mendengarkan")
+	}
+}
+
+func TestListenOrFindRunning_MendeteksiInstanceYangSudahBerjalan(t *testing.T) {
+	ts := httptest.NewServer(newHandler(newTestDir(t)))
+	defer ts.Close()
+
+	host, portStr, err := net.SplitHostPort(ts.Listener.Addr().String())
+	if err != nil {
+		t.Fatalf("gagal split host port: %v", err)
+	}
+	port, _ := strconv.Atoi(portStr)
+
+	listener, gotPort, alreadyRunning, err := listenOrFindRunning(host, port, port)
+	if err != nil {
+		t.Fatalf("seharusnya tidak error saat instance terdeteksi, dapat: %v", err)
+	}
+	if listener != nil {
+		listener.Close()
+		t.Fatal("listener harus nil jika instance sudah berjalan")
+	}
+	if !alreadyRunning {
+		t.Fatal("alreadyRunning harus bernilai true")
+	}
+	if gotPort != port {
+		t.Fatalf("diharapkan port %d, dapat %d", port, gotPort)
+	}
+}
+
 

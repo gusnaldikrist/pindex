@@ -349,6 +349,21 @@ func newHandler(baseDir string) http.Handler {
 		handleOpenPath(w, r)
 	})
 
+	// Ping endpoint: verifikasi liveness dan identitas instance PINDEX (Tiket 2).
+	// Dipakai saat mendeteksi apakah port sedang dipakai oleh instance PINDEX
+	// yang sudah aktif di latar belakang.
+	mux.HandleFunc("/api/ping", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", "GET")
+			http.Error(w, "metode tidak didukung", http.StatusMethodNotAllowed)
+			return
+		}
+		w.Header().Set("X-App", "pindex")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"app":"pindex","status":"ok"}`))
+	})
+
 	// Frontend: seluruh berkas di folder binary, termasuk index.html.
 	// Berkas data dan salinan harian disaring supaya tidak bisa diunduh lewat
 	// peramban; isinya milik user dan tidak perlu dibuka dari HTTP.
@@ -577,6 +592,61 @@ func readAllLimited(r *http.Request) ([]byte, error) {
 	return body, nil
 }
 
+// isPindexRunning memeriksa apakah host:port yang sedang aktif merupakan instance PINDEX.
+// Memakai HTTP GET ke /api/ping dengan batas waktu singkat (250ms).
+func isPindexRunning(host string, port int) bool {
+	client := &http.Client{
+		Timeout: 250 * time.Millisecond,
+	}
+	url := fmt.Sprintf("http://%s:%d/api/ping", host, port)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return false
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return false
+	}
+	if resp.Header.Get("X-App") == "pindex" {
+		return true
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 512))
+	if err != nil {
+		return false
+	}
+	return strings.Contains(string(body), `"app":"pindex"`)
+}
+
+// listenOrFindRunning mencoba mengikat port TCP pada rentang startPort..endPort.
+// Jika port sedang dipakai, fungsi ini memeriksa apakah port tersebut milik
+// instance PINDEX yang sudah berjalan. Jika ya, ia mengembalikan port tersebut
+// dengan flag alreadyRunning = true agar caller cukup membuka browser ke instance itu.
+func listenOrFindRunning(bindHost string, startPort, endPort int) (listener net.Listener, port int, alreadyRunning bool, err error) {
+	if startPort < 1 || endPort > 65535 || startPort > endPort {
+		return nil, 0, false, fmt.Errorf("rentang port tidak sah: %d - %d (harus 1-65535)", startPort, endPort)
+	}
+	var lastErr error
+	for p := startPort; p <= endPort; p++ {
+		addr := net.JoinHostPort(bindHost, strconv.Itoa(p))
+		l, err := net.Listen("tcp", addr)
+		if err == nil {
+			actualPort := l.Addr().(*net.TCPAddr).Port
+			return l, actualPort, false, nil
+		}
+		lastErr = err
+		// Port ini sedang dipakai. Cek apakah yang memakai adalah PINDEX yang sudah aktif.
+		if isPindexRunning(bindHost, p) {
+			return nil, p, true, nil
+		}
+	}
+	return nil, 0, false, fmt.Errorf("gagal mengikat listener pada rentang port %d-%d: %w", startPort, endPort, lastErr)
+}
+
 // listenWithFallback mencoba mengikat listener TCP mulai dari startPort hingga
 // endPort. Jika startPort sedang dipakai aplikasi lain, ia otomatis mencoba
 // port berikutnya hingga menemukan port yang kosong.
@@ -623,13 +693,22 @@ func promptExit(message string) {
 func main() {
 	baseDir := binaryDir()
 
-	listener, port, err := listenWithFallback(defaultBindHost, defaultPort, maxFallbackPort)
+	listener, port, alreadyRunning, err := listenOrFindRunning(defaultBindHost, defaultPort, maxFallbackPort)
 	if err != nil {
 		fmt.Printf("Gagal memulai server: %v\n", err)
 		promptExit("Tutup aplikasi lain yang memakai port tersebut, lalu jalankan pindex.exe lagi.")
 	}
 
 	url := fmt.Sprintf("http://%s:%d", defaultDisplayHost, port)
+
+	if alreadyRunning {
+		fmt.Printf("PINDEX sudah berjalan di latar belakang (port %d). Membuka browser...\n", port)
+		if err := openBrowser(url); err != nil {
+			fmt.Printf("Tidak bisa membuka browser otomatis. Buka %s secara manual.\n", url)
+		}
+		return
+	}
+
 	if port != defaultPort {
 		fmt.Printf("Port %d sedang dipakai aplikasi lain. PINDEX beralih ke port %d.\n", defaultPort, port)
 	}
