@@ -359,6 +359,7 @@ func newHandler(baseDir string) http.Handler {
 			return
 		}
 		w.Header().Set("X-App", "pindex")
+		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"app":"pindex","status":"ok"}`))
@@ -594,11 +595,20 @@ func readAllLimited(r *http.Request) ([]byte, error) {
 
 // isPindexRunning memeriksa apakah host:port yang sedang aktif merupakan instance PINDEX.
 // Memakai HTTP GET ke /api/ping dengan batas waktu singkat (250ms).
+// Mengabaikan proxy sistem (HTTP_PROXY) agar probe lokal 127.0.0.1 tidak dibelokkan.
 func isPindexRunning(host string, port int) bool {
-	client := &http.Client{
-		Timeout: 250 * time.Millisecond,
+	transport := &http.Transport{
+		Proxy:             nil, // Bypass HTTP_PROXY/HTTPS_PROXY untuk probe loopback
+		DisableKeepAlives: true,
 	}
-	url := fmt.Sprintf("http://%s:%d/api/ping", host, port)
+	client := &http.Client{
+		Timeout:   250 * time.Millisecond,
+		Transport: transport,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse // Jangan ikuti redirect ke luar
+		},
+	}
+	url := fmt.Sprintf("http://%s/api/ping", net.JoinHostPort(host, strconv.Itoa(port)))
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return false
@@ -623,13 +633,23 @@ func isPindexRunning(host string, port int) bool {
 }
 
 // listenOrFindRunning mencoba mengikat port TCP pada rentang startPort..endPort.
-// Jika port sedang dipakai, fungsi ini memeriksa apakah port tersebut milik
-// instance PINDEX yang sudah berjalan. Jika ya, ia mengembalikan port tersebut
-// dengan flag alreadyRunning = true agar caller cukup membuka browser ke instance itu.
+// Menggunakan strategi two-pass:
+// 1. Pass 1 (Probe): Periksa apakah PINDEX sudah berjalan di salah satu port dalam rentang.
+//    Jika ditemukan, langsung kembalikan port tersebut dengan alreadyRunning = true.
+// 2. Pass 2 (Bind): Jika tidak ada instance PINDEX aktif, ikat port pertama yang kosong.
 func listenOrFindRunning(bindHost string, startPort, endPort int) (listener net.Listener, port int, alreadyRunning bool, err error) {
 	if startPort < 1 || endPort > 65535 || startPort > endPort {
 		return nil, 0, false, fmt.Errorf("rentang port tidak sah: %d - %d (harus 1-65535)", startPort, endPort)
 	}
+
+	// Pass 1: Cek apakah ada instance PINDEX yang sudah aktif di salah satu port rentang
+	for p := startPort; p <= endPort; p++ {
+		if isPindexRunning(bindHost, p) {
+			return nil, p, true, nil
+		}
+	}
+
+	// Pass 2: Ikat port pertama yang tersedia
 	var lastErr error
 	for p := startPort; p <= endPort; p++ {
 		addr := net.JoinHostPort(bindHost, strconv.Itoa(p))
@@ -639,32 +659,14 @@ func listenOrFindRunning(bindHost string, startPort, endPort int) (listener net.
 			return l, actualPort, false, nil
 		}
 		lastErr = err
-		// Port ini sedang dipakai. Cek apakah yang memakai adalah PINDEX yang sudah aktif.
-		if isPindexRunning(bindHost, p) {
-			return nil, p, true, nil
-		}
 	}
 	return nil, 0, false, fmt.Errorf("gagal mengikat listener pada rentang port %d-%d: %w", startPort, endPort, lastErr)
 }
 
-// listenWithFallback mencoba mengikat listener TCP mulai dari startPort hingga
-// endPort. Jika startPort sedang dipakai aplikasi lain, ia otomatis mencoba
-// port berikutnya hingga menemukan port yang kosong.
+// listenWithFallback membungkus listenOrFindRunning untuk mendapatkan listener baru.
 func listenWithFallback(host string, startPort, endPort int) (net.Listener, int, error) {
-	if startPort < 1 || endPort > 65535 || startPort > endPort {
-		return nil, 0, fmt.Errorf("rentang port tidak sah: %d - %d (harus 1-65535)", startPort, endPort)
-	}
-	var lastErr error
-	for port := startPort; port <= endPort; port++ {
-		addr := net.JoinHostPort(host, strconv.Itoa(port))
-		listener, err := net.Listen("tcp", addr)
-		if err == nil {
-			actualPort := listener.Addr().(*net.TCPAddr).Port
-			return listener, actualPort, nil
-		}
-		lastErr = err
-	}
-	return nil, 0, fmt.Errorf("gagal mengikat listener pada rentang port %d-%d: %w", startPort, endPort, lastErr)
+	l, p, _, err := listenOrFindRunning(host, startPort, endPort)
+	return l, p, err
 }
 
 // waitForEnter menunggu input Enter dari pengguna sebelum proses ditutup.
@@ -705,6 +707,7 @@ func main() {
 		fmt.Printf("PINDEX sudah berjalan di latar belakang (port %d). Membuka browser...\n", port)
 		if err := openBrowser(url); err != nil {
 			fmt.Printf("Tidak bisa membuka browser otomatis. Buka %s secara manual.\n", url)
+			waitForEnter(os.Stdin, os.Stdout)
 		}
 		return
 	}

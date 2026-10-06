@@ -724,6 +724,9 @@ func TestPingEndpoint_MenolakMetodeBukanGET(t *testing.T) {
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("metode POST harus ditolak dengan 405, dapat: %d", rec.Code)
 	}
+	if rec.Header().Get("Allow") != "GET" {
+		t.Fatalf("diharapkan header Allow: GET, dapat: %q", rec.Header().Get("Allow"))
+	}
 }
 
 func TestIsPindexRunning_MendeteksiServerPindex(t *testing.T) {
@@ -797,5 +800,50 @@ func TestListenOrFindRunning_MendeteksiInstanceYangSudahBerjalan(t *testing.T) {
 		t.Fatalf("diharapkan port %d, dapat %d", port, gotPort)
 	}
 }
+
+func TestListenOrFindRunning_PrioritaskanInstancePindexDiFallbackPort(t *testing.T) {
+	// Jalankan PINDEX test server
+	ts := httptest.NewServer(newHandler(newTestDir(t)))
+	defer ts.Close()
+
+	host, p2Str, err := net.SplitHostPort(ts.Listener.Addr().String())
+	if err != nil {
+		t.Fatalf("gagal split host port: %v", err)
+	}
+	p2, _ := strconv.Atoi(p2Str)
+
+	// Cari port p1 kosong tepat sebelum p2 jika memungkinkan, atau uji rentang yang memuat p2
+	// Strategi: gunakan rentang dari p2-1 hingga p2 (jika p2-1 kosong dan sah)
+	p1 := p2 - 1
+	if p1 < 1 {
+		t.Skip("port p2 terlalu rendah untuk pengujian rentang")
+	}
+
+	// Pastikan p1 saat ini kosong
+	testProbe, err := net.Listen("tcp", net.JoinHostPort(host, strconv.Itoa(p1)))
+	if err != nil {
+		// p1 tidak kosong, lewati skenario rentang spesifik ini
+		t.Skip("port p1 tidak kosong di lingkungan test")
+	}
+	testProbe.Close() // sekarang p1 pasti kosong
+
+	// Meskipun p1 kosong, karena p2 memuat instance PINDEX yang aktif,
+	// listenOrFindRunning HARUS menemukan instance p2 (Pass 1) daripada mengikat p1 (Pass 2)!
+	listener, gotPort, alreadyRunning, err := listenOrFindRunning(host, p1, p2)
+	if err != nil {
+		t.Fatalf("seharusnya tidak error, dapat: %v", err)
+	}
+	if listener != nil {
+		listener.Close()
+		t.Fatalf("seharusnya tidak membuka listener baru di port %d saat PINDEX aktif di port %d", gotPort, p2)
+	}
+	if !alreadyRunning {
+		t.Fatal("alreadyRunning harus true")
+	}
+	if gotPort != p2 {
+		t.Fatalf("diharapkan port PINDEX %d, malah dapat %d", p2, gotPort)
+	}
+}
+
 
 
